@@ -1,4 +1,10 @@
-# Project exclude paths
+# Gradle
 /.gradle/
 /build/
-/build/classes/java/main/
+
+# Machine-specific Claude Code permissions. CLAUDE.md and PLAN.md are project
+# documentation and belong in the repo.
+/.claude/settings.local.json
+
+# Screenshots taken while testing
+/pics/
