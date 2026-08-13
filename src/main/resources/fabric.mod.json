@@ -3,28 +3,18 @@
 	"id": "deathcounter",
 	"version": "${version}",
 	"name": "DeathCounter",
-	"description": "This is a DeathCounter Mod",
+	"description": "Server-side death counter with full history, coordinates and tab list display.",
 	"authors": [
 		"RambonL."
 	],
-	"contact": {
-		"homepage": "https://fabricmc.net/",
-		"sources": "https://github.com/FabricMC/fabric-example-mod"
-	},
 	"license": "MIT-License",
 	"icon": "assets/deathcounter/icon.png",
-	"environment": "*",
+	"environment": "server",
 	"entrypoints": {
 		"main": [
 			"com.rambonl.deathcounter.DeathCounter"
-		],
-		"fabric-datagen": [
-			"com.rambonl.deathcounter.DeathCounterDataGenerator"
 		]
 	},
-	"mixins": [
-		"deathcounter.mixins.json"
-	],
 	"depends": {
 		"fabricloader": ">=0.19.3",
 		"minecraft": "~26.2",

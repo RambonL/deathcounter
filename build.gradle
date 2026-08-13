@@ -11,9 +11,28 @@ repositories {
 	// for more information about repositories.
 }
 
-fabricApi {
-	configureDataGeneration {
-		client = true
+// Three clients with fixed usernames, each in its own run directory so they do not fight over
+// options.txt and the log file. Only useful with online-mode=false on the dev server.
+loom {
+	runs {
+		clientAlpha {
+			client()
+			name = "Client Alpha"
+			runDir = "run/alpha"
+			programArgs "--username", "Alpha"
+		}
+		clientBravo {
+			client()
+			name = "Client Bravo"
+			runDir = "run/bravo"
+			programArgs "--username", "Bravo"
+		}
+		clientCharlie {
+			client()
+			name = "Client Charlie"
+			runDir = "run/charlie"
+			programArgs "--username", "Charlie"
+		}
 	}
 }
 
