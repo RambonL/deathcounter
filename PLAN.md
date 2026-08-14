@@ -174,7 +174,7 @@ More keys only when actually needed — broadcast and tab list are fixed.
 /deathsadmin last [player]         same, coords always, TP link attached  (op)
 /deathsadmin history <p> [page]    same, coords always, TP links attached (op)
 /deathsadmin tp <player> <idx>     teleport to the death spot             (op)
-/deathsadmin reset <player>        wipe counter + history                 (op)
+/deathsadmin reset <p> [confirm]   wipe counter + history                 (op)
 /deathsadmin import [confirm]      backfill from vanilla statistics       (op)
 /deathsadmin config coords <…>     set visibility + persist               (op)
 /deathsadmin config reload         reload config from disk                (op)

@@ -134,7 +134,10 @@ public final class DeathCommands {
 										.executes(ctx -> teleport(ctx, target(ctx),
 												IntegerArgumentType.getInteger(ctx, "number"))))))
 				.then(Commands.literal("reset")
-						.then(playerArgument().executes(ctx -> reset(ctx, target(ctx)))))
+						.then(playerArgument()
+								.executes(ctx -> reset(ctx, target(ctx), false))
+								.then(Commands.literal("confirm")
+										.executes(ctx -> reset(ctx, target(ctx), true)))))
 				.then(Commands.literal("import")
 						.executes(ctx -> importDeaths(ctx, false))
 						.then(Commands.literal("confirm").executes(ctx -> importDeaths(ctx, true))))
@@ -297,10 +300,26 @@ public final class DeathCommands {
 		return 1;
 	}
 
-	private static int reset(CommandContext<CommandSourceStack> ctx, Target target) {
+	/**
+	 * @param apply when false, only says what would go — an uncapped history is wiped by one
+	 *              tab completion, and nothing brings it back
+	 */
+	private static int reset(CommandContext<CommandSourceStack> ctx, Target target, boolean apply) {
 		MinecraftServer server = ctx.getSource().getServer();
 		DeathData data = DeathData.get(server);
 		int had = data.count(target.uuid());
+
+		if (had == 0) {
+			return reportNoDeaths(ctx, target);
+		}
+
+		if (!apply) {
+			ctx.getSource().sendSuccess(() -> Component
+					.literal("Would wipe " + count(had) + " of " + target.name() + ". Run /"
+							+ ADMIN + " reset " + target.name() + " confirm to do it.")
+					.withStyle(ChatFormatting.GRAY), false);
+			return had;
+		}
 
 		data.reset(target.uuid());
 

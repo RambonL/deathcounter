@@ -46,7 +46,8 @@ Operators (permission level 2 and up):
 /deathsadmin last [player]         same, but coordinates are always shown
 /deathsadmin history <player> [page]
 /deathsadmin tp <player> <number>  teleport to that death, dimension included
-/deathsadmin reset <player>        wipe that player's counter and history
+/deathsadmin reset <player>        show what wiping that player would cost
+/deathsadmin reset <player> confirm  wipe their counter and history
 /deathsadmin import                show what could be taken over from vanilla
 /deathsadmin import confirm        take it over
 /deathsadmin config coords <mode>  set coordinate visibility and save it
