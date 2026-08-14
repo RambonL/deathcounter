@@ -7,7 +7,7 @@
 	"authors": [
 		"RambonL."
 	],
-	"license": "MIT-License",
+	"license": "MIT",
 	"icon": "assets/deathcounter/icon.png",
 	"environment": "server",
 	"entrypoints": {
