@@ -39,6 +39,20 @@ public class DeathData extends SavedData {
 				Codec.STRING.fieldOf("cause").forGetter(Death::causeId),
 				ComponentSerialization.CODEC.fieldOf("message").forGetter(Death::message)
 		).apply(instance, Death::new));
+
+		/**
+		 * A death taken over from vanilla's own counter, which knows only that it happened. Dimension
+		 * and position are filler so the codec has something to write; the zero timestamp is what
+		 * marks the death as having no known time, place or cause.
+		 */
+		public static Death unknown(String name) {
+			return new Death(0L, Level.OVERWORLD, BlockPos.ZERO, "unknown",
+					Component.translatable("death.attack.generic", name));
+		}
+
+		public boolean isUnknown() {
+			return timestamp == 0L;
+		}
 	}
 
 	/** One player's deaths. Mutable, because the list grows with every death. */
@@ -88,6 +102,20 @@ public class DeathData extends SavedData {
 		Entry entry = players.computeIfAbsent(player.getUUID(), uuid -> new Entry(player.getScoreboardName(), List.of()));
 		entry.name = player.getScoreboardName();
 		entry.deaths.add(death);
+		setDirty();
+	}
+
+	/**
+	 * Puts deaths in front of everything recorded so far, and creates the entry if the player has
+	 * none yet. Only for imports: those deaths happened before the mod was installed, so they belong
+	 * at the old end of the history. An existing name is left alone, being the more recent one.
+	 */
+	public void prepend(UUID player, String name, List<Death> older) {
+		if (older.isEmpty()) {
+			return;
+		}
+
+		players.computeIfAbsent(player, uuid -> new Entry(name, List.of())).deaths.addAll(0, older);
 		setDirty();
 	}
 

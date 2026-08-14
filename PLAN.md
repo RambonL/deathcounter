@@ -11,6 +11,7 @@ history including coordinates, shows the counter in the tab list and in chat.
 - [x] `DeathCounter` (init, AFTER_DEATH hook, scoreboard sync, broadcast)
 - [x] `DeathCommands` (Brigadier, message building, pagination)
 - [x] Test with `./gradlew runServer` and a vanilla client
+- [x] Import from vanilla statistics (`/deathsadmin import`)
 
 ## Principles
 
@@ -44,6 +45,9 @@ Entry: uuid -> { name, deaths[] }
 - No `total` field: with uncapped history it is always `deaths.size()`, and a
   second value claiming the same thing eventually disagrees.
 - No `killer` field: it is already in `message`, and grouping goes by `causeId`.
+- **`timestamp == 0` marks an imported death** — see below. No extra flag field:
+  a real death cannot land on the epoch, and a flag would be one more thing that
+  can disagree with the rest of the record.
 
 ## Storage
 
@@ -62,8 +66,35 @@ pass `null` because our data has no legacy formats to migrate.
 Full history, no cap. Call `setDirty()` only on death and on config change —
 if nothing changed, vanilla skips the write.
 
-> `ponytail:` everything in memory, full rewrite per autosave. Move to SQLite
-> or per-player files if death counts reach six figures.
+### Why the world folder and not our own
+
+The data belongs to the world, not to the server installation. A world restored
+from backup brings its deaths back with it; a folder next to it would keep
+counting deaths for events the world no longer has. Copying or renaming the
+world carries the file along, and a second world gets its own counter for free.
+On top of that, vanilla already encodes only what is dirty, writes off the
+server thread through `Util.ioPool()` and joins on shutdown.
+
+The price: NBT is not editable by hand, and `SavedDataStorage` writes straight
+through `NbtIo.writeCompressed` — no temp-and-rename, no `.dat_old`, so a crash
+mid-write can corrupt the file.
+
+### Size
+
+Measured on the dev world: **158 bytes** per imported death, **576 bytes** per
+real one, uncompressed. The difference is the component tree of the vanilla
+message, with the killer's name and its hover data.
+
+The encode runs on the server thread once per autosave and only when something
+died; gzip and the write itself do not. So the load scales with the total number
+of deaths, not with the player count. 20 players at 500 deaths each is 5.8 MB
+uncompressed, about 700 KB on disk — nothing.
+
+> `ponytail:` the tighter ceiling is heap, not disk: every message stays a live
+> component tree, several KB each, and is never released. If it ever hurts,
+> store `message` as plain text first (~80 bytes per death, and it costs the
+> per-viewer translation), and only then split into per-player files. Six-figure
+> death counts, not before. Do not reach for a database.
 
 ## Coordinate visibility
 
@@ -117,6 +148,7 @@ More keys only when actually needed — broadcast and tab list are fixed.
 /deathsadmin history <p> [page]    same, coords always, TP links attached (op)
 /deathsadmin tp <player> <idx>     teleport to the death spot             (op)
 /deathsadmin reset <player>        wipe counter + history                 (op)
+/deathsadmin import [confirm]      backfill from vanilla statistics       (op)
 /deathsadmin config coords <…>     set visibility + persist               (op)
 /deathsadmin config reload         reload config from disk                (op)
 ```
@@ -147,6 +179,32 @@ suggestion was there. Separating the roots removes the sibling relationship.
 
 Do not fold `deathsadmin` back under `/deaths` as a subcommand.
 
+## Import from vanilla statistics
+
+Every world has counted `minecraft:deaths` per player since long before this mod
+was installed, in `world/players/stats/<uuid>.json`. `/deathsadmin import` reads
+it and adds the difference to what we recorded.
+
+- Read through `new ServerStatsCounter(server, path)`, not by parsing the JSON:
+  the constructor already handles a missing file and runs the content through the
+  data fixer, so old worlds work. Online players are read from their live counter
+  instead — their file is only written when the world saves.
+- Names come from our own record first, then `server.services().nameToIdCache()`,
+  then the bare UUID.
+- The imported deaths carry `timestamp = 0`, `cause = "unknown"` and
+  `Component.translatable("death.attack.generic", name)`. Dimension and position
+  are filler that nothing is allowed to read.
+- They are **prepended**, because they happened before anything we recorded. That
+  shifts the numbers of existing deaths, which is why it is a one-shot admin
+  operation and not something that runs on its own.
+- `/deathsadmin import` alone only previews; `import confirm` writes. Running it
+  twice imports nothing, since the counts then match — which also makes it the
+  cheapest check that the two sources agree.
+
+A vanilla counter that is *lower* than ours is ignored rather than trimmed. That
+happens after `/deathsadmin reset`, and deleting a history to match a statistic
+is the wrong direction.
+
 ## Pagination
 
 Plain text, no buttons: `Page 2/7 — next: /deaths history Rambo 3`. Saves
@@ -155,8 +213,7 @@ component building and edge cases, costs one keystroke.
 ## Clickable teleport
 
 Only the coordinates themselves are clickable: `ClickEvent` with `RUN_COMMAND`
-pointing at `/deaths admin tp`, `HoverEvent` showing dimension, full
-coordinates and cause of death.
+pointing at `/deathsadmin tp`, `HoverEvent` showing the cause of death.
 
 It runs in the context of the clicking player, so the permission check applies
 automatically — non-ops simply see no link. The teleport carries the dimension
@@ -175,3 +232,8 @@ there. This is an op tool, and `/gamemode spectator` already solves it.
   empty root rather than being the root.
 - Killing the dev server with `pkill` skips the world save and loses every
   death since the last autosave. Use `stop` on the console.
+- An imported death has a placeholder position. Everything that prints or uses a
+  location must check `isUnknown()` first — the rendering skips the coordinates,
+  and `tp` refuses. Otherwise an operator gets flung to 0/0/0.
+- Importing shifts the numbers of deaths already recorded, so a teleport link in
+  an old chat message points at the wrong entry afterwards.

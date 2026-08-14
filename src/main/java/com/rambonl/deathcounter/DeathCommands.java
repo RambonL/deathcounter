@@ -23,11 +23,18 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.players.NameAndId;
+import net.minecraft.stats.ServerStatsCounter;
+import net.minecraft.stats.Stats;
+import net.minecraft.world.level.storage.LevelResource;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
@@ -37,6 +44,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * The {@code /deaths} command tree.
@@ -127,6 +135,9 @@ public final class DeathCommands {
 												IntegerArgumentType.getInteger(ctx, "number"))))))
 				.then(Commands.literal("reset")
 						.then(playerArgument().executes(ctx -> reset(ctx, target(ctx)))))
+				.then(Commands.literal("import")
+						.executes(ctx -> importDeaths(ctx, false))
+						.then(Commands.literal("confirm").executes(ctx -> importDeaths(ctx, true))))
 				.then(configNode());
 	}
 
@@ -260,6 +271,13 @@ public final class DeathCommands {
 		}
 
 		DeathData.Death death = deaths.get(number - 1);
+
+		if (death.isUnknown()) {
+			ctx.getSource().sendFailure(
+					Component.literal("Death #" + number + " was imported and has no location"));
+			return 0;
+		}
+
 		ServerLevel level = ctx.getSource().getServer().getLevel(death.dimension());
 
 		// The dimension can be gone if a datapack that added it was removed.
@@ -299,6 +317,117 @@ public final class DeathCommands {
 		return had;
 	}
 
+	/**
+	 * Backfills from vanilla's own death counter, which the world has kept since long before this mod
+	 * was installed. That counter is a single number, so the difference to what we recorded is added
+	 * as deaths with no time, place or cause. Running it again imports nothing, since the counts then
+	 * match.
+	 *
+	 * @param apply when false, only lists what would change — nobody should write into a history blind
+	 */
+	private static int importDeaths(CommandContext<CommandSourceStack> ctx, boolean apply) {
+		MinecraftServer server = ctx.getSource().getServer();
+		DeathData data = DeathData.get(server);
+		Path stats = server.getWorldPath(LevelResource.PLAYER_STATS_DIR);
+
+		MutableComponent message = header(apply ? "Imported from vanilla statistics" : "Import preview");
+		int total = 0;
+
+		for (UUID uuid : trackedByVanilla(stats)) {
+			int missing = vanillaDeaths(server, stats, uuid) - data.count(uuid);
+
+			// Negative when someone was reset here but not in vanilla. Adding nothing is the safe read.
+			if (missing <= 0) {
+				continue;
+			}
+
+			String name = name(server, data, uuid);
+			total += missing;
+
+			if (apply) {
+				// Death is immutable, so one instance can stand in for all of them.
+				data.prepend(uuid, name, Collections.nCopies(missing, DeathData.Death.unknown(name)));
+
+				ServerPlayer online = server.getPlayerList().getPlayer(uuid);
+
+				if (online != null) {
+					DeathCounter.syncScore(server, online);
+				}
+			}
+
+			message.append(Component.literal("\n  +" + missing + " ").withStyle(ChatFormatting.GOLD))
+					.append(Component.literal(name).withStyle(ChatFormatting.WHITE));
+		}
+
+		if (total == 0) {
+			ctx.getSource().sendSuccess(() -> Component
+					.literal("Nothing to import — every counter already matches vanilla.")
+					.withStyle(ChatFormatting.GRAY), false);
+			return 0;
+		}
+
+		if (!apply) {
+			message.append(Component.literal("\nRun /" + ADMIN + " import confirm to write this.")
+					.withStyle(ChatFormatting.GRAY));
+		}
+
+		ctx.getSource().sendSuccess(() -> message, apply);
+		return total;
+	}
+
+	/** Everyone the world has a statistics file for, whether or not they ever came back. */
+	private static List<UUID> trackedByVanilla(Path stats) {
+		if (!Files.isDirectory(stats)) {
+			return List.of();
+		}
+
+		try (Stream<Path> files = Files.list(stats)) {
+			return files.map(file -> file.getFileName().toString())
+					.filter(file -> file.endsWith(".json"))
+					.map(file -> uuidOrNull(file.substring(0, file.length() - ".json".length())))
+					.filter(Objects::nonNull)
+					.toList();
+		} catch (IOException e) {
+			DeathCounter.LOGGER.error("Could not list {}", stats, e);
+			return List.of();
+		}
+	}
+
+	private static UUID uuidOrNull(String text) {
+		try {
+			return UUID.fromString(text);
+		} catch (IllegalArgumentException e) {
+			// Something else living in the stats folder. Not ours to worry about.
+			return null;
+		}
+	}
+
+	/**
+	 * What vanilla counted. Online players are read from their live counter, because their file is
+	 * only written when the world saves and would be short by everything since.
+	 */
+	private static int vanillaDeaths(MinecraftServer server, Path stats, UUID uuid) {
+		ServerPlayer online = server.getPlayerList().getPlayer(uuid);
+
+		// The constructor parses the file and runs it through the data fixer, so old worlds work too.
+		ServerStatsCounter counter = online != null
+				? server.getPlayerList().getPlayerStats(online)
+				: new ServerStatsCounter(server, stats.resolve(uuid + ".json"));
+
+		return counter.getValue(Stats.CUSTOM.get(Stats.DEATHS));
+	}
+
+	/** Our own record first, then the server's name cache, and a bare UUID as the last resort. */
+	private static String name(MinecraftServer server, DeathData data, UUID uuid) {
+		String known = data.name(uuid);
+
+		if (known != null) {
+			return known;
+		}
+
+		return server.services().nameToIdCache().get(uuid).map(NameAndId::name).orElse(uuid.toString());
+	}
+
 	private static int setVisibility(CommandContext<CommandSourceStack> ctx, Config.CoordVisibility value) {
 		Config.setCoordVisibility(value);
 		return reportVisibility(ctx, "coordVisibility is now ", true);
@@ -331,11 +460,11 @@ public final class DeathCommands {
 		// Every part carries its own colour: a style on the parent would bleed into the vanilla
 		// death message, which brings its own formatting.
 		MutableComponent line = Component.literal("#" + number + " ").withStyle(ChatFormatting.YELLOW)
-				.append(Component.literal(TIME.format(Instant.ofEpochMilli(death.timestamp())) + "  ")
-						.withStyle(ChatFormatting.GRAY))
+				.append(Component.literal(time(death) + "  ").withStyle(ChatFormatting.GRAY))
 				.append(death.message().copy().withStyle(ChatFormatting.WHITE));
 
-		if (Config.maySeeCoords(source, target.uuid(), admin)) {
+		// An imported death has no position, only a placeholder one — never offer it as a location.
+		if (!death.isUnknown() && Config.maySeeCoords(source, target.uuid(), admin)) {
 			MutableComponent coords = Component
 					.literal("  " + DeathCounter.posText(death))
 					.withStyle(ChatFormatting.AQUA);
@@ -374,6 +503,11 @@ public final class DeathCommands {
 		}
 
 		return footer.withStyle(ChatFormatting.GRAY);
+	}
+
+	/** The placeholder keeps the width of a real timestamp, so the messages after it stay aligned. */
+	private static String time(DeathData.Death death) {
+		return death.isUnknown() ? "??-?? ??:??" : TIME.format(Instant.ofEpochMilli(death.timestamp()));
 	}
 
 	private static String count(int deaths) {
