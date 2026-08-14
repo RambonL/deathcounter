@@ -28,6 +28,17 @@ commands), so there is nothing to install on their side.
 | Fabric API | required |
 | Java | 25 |
 
+## Installation
+
+1. Build the jar with `./gradlew build` — it lands in `build/libs/` as
+   `deathcounter-<version>.jar`. The `-sources.jar` next to it is the source
+   code and does not belong on a server.
+2. Drop it into the server's `mods/` folder, next to Fabric API.
+3. Restart the server. It creates `config/deathcounter.json` on first start.
+
+Server only. The mod declares itself server-side, so a client that has it
+installed anyway simply never starts it.
+
 ## Commands
 
 Everyone:
@@ -43,15 +54,15 @@ Everyone:
 Operators (permission level 2 and up):
 
 ```
-/deathsadmin last [player]         same, but coordinates are always shown
-/deathsadmin history <player> [page]
-/deathsadmin tp <player> <number>  teleport to that death, dimension included
-/deathsadmin reset <player>        show what wiping that player would cost
-/deathsadmin reset <player> confirm  wipe their counter and history
-/deathsadmin import                show what could be taken over from vanilla
-/deathsadmin import confirm        take it over
-/deathsadmin config coords <mode>  set coordinate visibility and save it
-/deathsadmin config reload         re-read the config file from disk
+/deathsadmin last [player]            a single death, coordinates always shown
+/deathsadmin history <player> [page]  full history, with teleport links
+/deathsadmin tp <player> <number>     teleport to that death, dimension included
+/deathsadmin reset <player>           show what wiping that player would cost
+/deathsadmin reset <player> confirm   wipe their counter and history
+/deathsadmin import                   show what could be taken over from vanilla
+/deathsadmin import confirm           take it over
+/deathsadmin config coords <mode>     set coordinate visibility and save it
+/deathsadmin config reload            re-read the config file from disk
 ```
 
 `<number>` is the number shown in front of a history entry. It counts from the
@@ -123,12 +134,15 @@ somebody actually died.
 The tab list number is only a display: the file is the source of truth, and the
 scoreboard is rewritten from it on every join and death.
 
-## Building
+## Development
 
 ```
-./gradlew build       # jar lands in build/libs/
-./gradlew runServer   # test server in run/
+./gradlew runServer     # test server in run/
+./gradlew clean build   # rebuild from scratch
 ```
+
+The mod version and every dependency version live in `gradle.properties`, not in
+`build.gradle`.
 
 See `CLAUDE.md` for the development setup, including the three prepared clients,
 and `PLAN.md` for the design and the reasoning behind it.
