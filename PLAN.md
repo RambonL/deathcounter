@@ -79,6 +79,33 @@ The price: NBT is not editable by hand, and `SavedDataStorage` writes straight
 through `NbtIo.writeCompressed` — no temp-and-rename, no `.dat_old`, so a crash
 mid-write can corrupt the file.
 
+### Do not save more often than vanilla
+
+`MinecraftServer#computeNextAutosaveInterval()` is `max(100, tickrate * 300)`,
+so 6000 ticks at 20 tps: every 5 minutes. That autosave writes player data,
+chunks, statistics and our `SavedData` in one pass. `SavedDataStorage#scheduleSave()`
+is public, so writing after every death is one line away — do not.
+
+A crash rolls the whole world back to the last autosave. Because everything was
+written together, it rolls back together: inventory, death, and vanilla's
+`minecraft:deaths` all return to the same moment. We lose deaths, but nothing
+contradicts anything.
+
+Flushing our file on its own breaks exactly that. The player gets their items
+back and keeps the death, and vanilla's counter is permanently one behind ours —
+which also breaks the import as a consistency check, since it can only ever add.
+
+| | Loss on crash | State afterwards |
+|---|---|---|
+| autosave (now) | up to 5 min of deaths | consistent with world and statistics |
+| own flush | up to the flush interval | death without its consequences, counters drift |
+
+Saving our data together with `PlayerList#saveAll()` would at least keep the
+inventory in step, but not the chunks the drops lie in. And vanilla's interval is
+a private constant with no game rule, so shortening it for everything at once
+would need a mixin. What actually shrinks the window is shutting down properly:
+`stop` runs `saveAndJoin()` and loses nothing.
+
 ### Size
 
 Measured on the dev world: **158 bytes** per imported death, **576 bytes** per
@@ -232,6 +259,8 @@ there. This is an op tool, and `/gamemode spectator` already solves it.
   empty root rather than being the root.
 - Killing the dev server with `pkill` skips the world save and loses every
   death since the last autosave. Use `stop` on the console.
+- Saving our data more often than the autosave looks like an improvement and is
+  not, see above.
 - An imported death has a placeholder position. Everything that prints or uses a
   location must check `isUnknown()` first — the rendering skips the coordinates,
   and `tp` refuses. Otherwise an operator gets flung to 0/0/0.
