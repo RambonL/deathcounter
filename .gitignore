@@ -8,3 +8,13 @@
 
 # Screenshots taken while testing
 /pics/
+# Dev server. The world and the logs are local scratch; only the files a fresh
+# clone needs to boot a test server are tracked.
+/run/*
+!/run/ops.json
+!/run/server.properties
+!/run/eula.txt
+
+# IDE. Loom regenerates the run configurations from build.gradle, and the ones
+# IDEA writes hardcode absolute paths.
+/.idea/
