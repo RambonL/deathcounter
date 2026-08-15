@@ -30,9 +30,10 @@ commands), so there is nothing to install on their side.
 
 ## Installation
 
-1. Build the jar with `./gradlew build` — it lands in `build/libs/` as
-   `deathcounter-<version>.jar`. The `-sources.jar` next to it is the source
-   code and does not belong on a server.
+1. Download the jar from
+   [Modrinth](https://modrinth.com/mod/deathcounter-server), or build it
+   yourself with `./gradlew build` — it lands in `build/libs/`. The
+   `-sources.jar` next to it is the source code and does not belong on a server.
 2. Drop it into the server's `mods/` folder, next to Fabric API.
 3. Restart the server. It creates `config/deathcounter.json` on first start.
 
