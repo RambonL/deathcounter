@@ -149,4 +149,10 @@ and `PLAN.md` for the design and the reasoning behind it.
 
 ## License
 
-MIT — see `LICENSE`.
+Copyright (C) 2026 RambonL
+
+GNU Lesser General Public License v3.0 only — see `LICENSE`, which incorporates
+`gpl-3.0.txt` by reference.
+
+Use it, run it, fork it. If you publish a modified version, it stays under the
+LGPL and the copyright notice stays with it.

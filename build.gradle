@@ -72,7 +72,8 @@ jar {
 	def projectName = project.name
 	inputs.property "projectName", projectName
 
-	from("LICENSE") {
+	// LGPL-3.0 is the GPL plus additional permissions, so both texts have to ship.
+	from("LICENSE", "gpl-3.0.txt") {
 		rename { "${it}_$projectName"}
 	}
 }
