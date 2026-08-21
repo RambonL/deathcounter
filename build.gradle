@@ -43,6 +43,14 @@ dependencies {
 
 	// Fabric API. This is technically optional, but you probably want it anyway.
 	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+
+	// Runs JUnit on the loader's classpath, which is what makes Minecraft classes usable in a
+	// plain unit test. Brings JUnit 5 with it. See TESTING.md.
+	testImplementation "net.fabricmc:fabric-loader-junit:${project.loader_version}"
+}
+
+test {
+	useJUnitPlatform()
 }
 
 processResources {

@@ -89,7 +89,7 @@ public class DeathData extends SavedData {
 	// becomes the problem, store message as plain text before reaching for a database.
 	private final Map<UUID, Entry> players;
 
-	private DeathData(Map<UUID, Entry> players) {
+	DeathData(Map<UUID, Entry> players) {
 		this.players = new HashMap<>(players);
 	}
 
@@ -97,10 +97,14 @@ public class DeathData extends SavedData {
 		return server.getDataStorage().computeIfAbsent(TYPE);
 	}
 
-	/** Records a death and refreshes the stored name, so renames do not orphan the history. */
 	public void add(ServerPlayer player, Death death) {
-		Entry entry = players.computeIfAbsent(player.getUUID(), uuid -> new Entry(player.getScoreboardName(), List.of()));
-		entry.name = player.getScoreboardName();
+		add(player.getUUID(), player.getScoreboardName(), death);
+	}
+
+	/** Records a death and refreshes the stored name, so renames do not orphan the history. */
+	public void add(UUID player, String name, Death death) {
+		Entry entry = players.computeIfAbsent(player, uuid -> new Entry(name, List.of()));
+		entry.name = name;
 		entry.deaths.add(death);
 		setDirty();
 	}

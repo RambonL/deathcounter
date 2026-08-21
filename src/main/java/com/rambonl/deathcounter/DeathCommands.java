@@ -203,26 +203,21 @@ public final class DeathCommands {
 			return reportNoDeaths(ctx, target);
 		}
 
-		int pages = pageCount(deaths.size());
-		int current = Math.clamp(page, 1, pages);
-
-		// Stored oldest first, shown newest first: walk one page backwards from the end.
-		int end = deaths.size() - (current - 1) * PAGE_SIZE;
-		int start = Math.max(0, end - PAGE_SIZE);
-
+		Window window = window(deaths.size(), page);
 		MutableComponent message = header(target.name() + " — history, newest first");
 
-		for (int i = end - 1; i >= start; i--) {
+		for (int i = window.end() - 1; i >= window.start(); i--) {
 			message.append(Component.literal("\n"))
 					.append(entry(ctx.getSource(), target, deaths.get(i), i + 1, admin));
 		}
 
-		if (pages > 1) {
-			message.append(footer(current, pages, command(admin, "history " + target.name() + " " + (current + 1))));
+		if (window.pages() > 1) {
+			message.append(footer(window.page(), window.pages(),
+					command(admin, "history " + target.name() + " " + (window.page() + 1))));
 		}
 
 		ctx.getSource().sendSuccess(() -> message, false);
-		return end - start;
+		return window.end() - window.start();
 	}
 
 	private static int top(CommandContext<CommandSourceStack> ctx, int page) {
@@ -513,8 +508,25 @@ public final class DeathCommands {
 		return Component.empty().append(Component.literal(text).withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD));
 	}
 
+	/**
+	 * Which slice of a history one page shows, as indices into the stored list.
+	 *
+	 * @param page the requested page, clamped into range
+	 */
+	record Window(int start, int end, int page, int pages) {
+	}
+
+	/** Stored oldest first, shown newest first: page 1 is the tail, later pages walk backwards. */
+	static Window window(int size, int page) {
+		int pages = pageCount(size);
+		int current = Math.clamp(page, 1, pages);
+		int end = size - (current - 1) * PAGE_SIZE;
+
+		return new Window(Math.max(0, end - PAGE_SIZE), end, current, pages);
+	}
+
 	/** Only worth showing when there is more than one page — otherwise it is pure noise. */
-	private static Component footer(int page, int pages, String nextCommand) {
+	static Component footer(int page, int pages, String nextCommand) {
 		MutableComponent footer = Component.literal("\nPage " + page + "/" + pages);
 
 		if (page < pages) {
@@ -525,24 +537,24 @@ public final class DeathCommands {
 	}
 
 	/** The placeholder keeps the width of a real timestamp, so the messages after it stay aligned. */
-	private static String time(DeathData.Death death) {
+	static String time(DeathData.Death death) {
 		return death.isUnknown() ? "??-?? ??:??" : TIME.format(Instant.ofEpochMilli(death.timestamp()));
 	}
 
-	private static String count(int deaths) {
+	static String count(int deaths) {
 		return deaths + (deaths == 1 ? " death" : " deaths");
 	}
 
 	/** {@code outOfWorld} reads as {@code out of world}; the raw ids are developer-facing. */
-	private static String cause(String causeId) {
+	static String cause(String causeId) {
 		return causeId.replaceAll("([a-z])([A-Z])", "$1 $2").toLowerCase(Locale.ROOT);
 	}
 
-	private static String command(boolean admin, String rest) {
+	static String command(boolean admin, String rest) {
 		return (admin ? "/" + ADMIN + " " : "/deaths ") + rest;
 	}
 
-	private static int pageCount(int entries) {
+	static int pageCount(int entries) {
 		return Math.max(1, (entries + PAGE_SIZE - 1) / PAGE_SIZE);
 	}
 

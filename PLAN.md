@@ -12,6 +12,7 @@ history including coordinates, shows the counter in the tab list and in chat.
 - [x] `DeathCommands` (Brigadier, message building, pagination)
 - [x] Test with `./gradlew runServer` and a vanilla client
 - [x] Import from vanilla statistics (`/deathsadmin import`)
+- [x] Headless JUnit tests — see [TESTING.md](TESTING.md)
 
 ## Principles
 

@@ -5,6 +5,7 @@ import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
+import net.fabricmc.loader.api.FabricLoader;
 
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
@@ -32,7 +33,7 @@ public class DeathCounter implements ModInitializer {
 
 	@Override
 	public void onInitialize() {
-		Config.load();
+		Config.init(FabricLoader.getInstance().getConfigDir());
 
 		CommandRegistrationCallback.EVENT.register((dispatcher, registries, environment) -> DeathCommands.register(dispatcher));
 		ServerLifecycleEvents.SERVER_STARTED.register(DeathCounter::setUpObjective);

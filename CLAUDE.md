@@ -13,9 +13,15 @@ player-facing messages.
 ## Build
 
 ```
-./gradlew build       # jar lands in build/libs/
+./gradlew build       # jar lands in build/libs/, runs the tests
+./gradlew test        # headless JUnit only, seconds — see TESTING.md
 ./gradlew runServer   # test server in run/
 ```
+
+Tests live in `src/test/java` in the same package as the code and reach
+package-private helpers. Every test class extends `BootstrappedTest`: the
+registries throw before `Bootstrap.bootStrap()`, one JVM is shared by all test
+classes, and a class that fails to initialize stays failed for the whole run.
 
 Three prepared clients with fixed usernames, each in its own run directory:
 `runClientAlpha`, `runClientBravo`, `runClientCharlie`. The dev server has

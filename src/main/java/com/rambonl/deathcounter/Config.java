@@ -4,9 +4,8 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonParseException;
 
-import net.fabricmc.loader.api.FabricLoader;
-
 import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.server.level.ServerPlayer;
 
 import java.io.IOException;
 import java.io.Reader;
@@ -30,8 +29,10 @@ public final class Config {
 		PUBLIC
 	}
 
-	private static final Path FILE = FabricLoader.getInstance().getConfigDir().resolve(DeathCounter.MOD_ID + ".json");
 	private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+
+	/** Where the settings live. Set once at startup, because only the loader knows the directory. */
+	private static Path file;
 
 	private static Config current = new Config();
 
@@ -65,33 +66,50 @@ public final class Config {
 	 * @param admin whether this ran under {@code /deathsadmin}, which Brigadier already gated
 	 */
 	public static boolean maySeeCoords(CommandSourceStack source, UUID target, boolean admin) {
+		ServerPlayer player = source.getPlayer();
+		return maySeeCoords(player == null ? null : player.getUUID(), target, admin);
+	}
+
+	/**
+	 * The gate itself, on the two things it actually decides on. Still the one check — the overload
+	 * above only unwraps the viewer, it does not decide anything.
+	 *
+	 * @param viewer who is asking, or null for the console and command blocks
+	 */
+	static boolean maySeeCoords(UUID viewer, UUID target, boolean admin) {
 		if (admin) {
 			return true;
 		}
 
 		return switch (coordVisibility()) {
 			case HIDDEN -> false;
-			case SELF -> source.getPlayer() != null && source.getPlayer().getUUID().equals(target);
+			case SELF -> viewer != null && viewer.equals(target);
 			case PUBLIC -> true;
 		};
+	}
+
+	/** Points the settings at {@code configDir} and reads them. Once, at startup. */
+	public static void init(Path configDir) {
+		file = configDir.resolve(DeathCounter.MOD_ID + ".json");
+		load();
 	}
 
 	public static void load() {
 		Config loaded;
 
-		try (Reader reader = Files.newBufferedReader(FILE)) {
+		try (Reader reader = Files.newBufferedReader(file)) {
 			loaded = GSON.fromJson(reader, Config.class);
 		} catch (NoSuchFileException e) {
 			save(); // First start: write the defaults so there is a file to edit.
 			return;
 		} catch (IOException | JsonParseException e) {
-			DeathCounter.LOGGER.error("Could not read {}, keeping the current settings", FILE, e);
+			DeathCounter.LOGGER.error("Could not read {}, keeping the current settings", file, e);
 			return;
 		}
 
 		// Gson leaves the field null for an empty file or an unknown enum constant.
 		if (loaded == null || loaded.coordVisibility == null) {
-			DeathCounter.LOGGER.warn("{} has no valid coordVisibility, keeping {}", FILE, coordVisibility());
+			DeathCounter.LOGGER.warn("{} has no valid coordVisibility, keeping {}", file, coordVisibility());
 			return;
 		}
 
@@ -100,13 +118,13 @@ public final class Config {
 
 	public static void save() {
 		try {
-			Files.createDirectories(FILE.getParent());
+			Files.createDirectories(file.getParent());
 
-			try (Writer writer = Files.newBufferedWriter(FILE)) {
+			try (Writer writer = Files.newBufferedWriter(file)) {
 				GSON.toJson(current, writer);
 			}
 		} catch (IOException e) {
-			DeathCounter.LOGGER.error("Could not write {}", FILE, e);
+			DeathCounter.LOGGER.error("Could not write {}", file, e);
 		}
 	}
 }
