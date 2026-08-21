@@ -1,0 +1,67 @@
+plugins {
+	id 'net.fabricmc.fabric-loom' version "${loom_version}"
+}
+
+// The shared tree is added in the root build.gradle; only the entrypoint lives here.
+
+// The dev world, ops.json and server.properties live in the repo root, so both loaders share one
+// test setup and the same world can be booted on either.
+loom {
+	runs {
+		server {
+			runDir = "../run"
+		}
+		client {
+			runDir = "../run"
+		}
+		// Three clients with fixed usernames, each in its own run directory so they do not fight
+		// over options.txt and the log file. Only useful with online-mode=false on the dev server.
+		clientAlpha {
+			client()
+			name = "Client Alpha"
+			runDir = "../run/alpha"
+			programArgs "--username", "Alpha"
+		}
+		clientBravo {
+			client()
+			name = "Client Bravo"
+			runDir = "../run/bravo"
+			programArgs "--username", "Bravo"
+		}
+		clientCharlie {
+			client()
+			name = "Client Charlie"
+			runDir = "../run/charlie"
+			programArgs "--username", "Charlie"
+		}
+	}
+}
+
+// The tests cover the shared code, which is identical on both loaders, so they run here only —
+// fabric-loader-junit is what makes Minecraft classes usable in a plain unit test. See TESTING.md.
+sourceSets.test.java.srcDir rootProject.file("src/test/java")
+
+dependencies {
+	// To change the versions see the gradle.properties file
+	minecraft "com.mojang:minecraft:${project.minecraft_version}"
+	implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+
+	// Fabric API. This is technically optional, but you probably want it anyway.
+	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+
+	// Brings JUnit 5 with it.
+	testImplementation "net.fabricmc:fabric-loader-junit:${project.loader_version}"
+}
+
+test {
+	useJUnitPlatform()
+}
+
+processResources {
+	def version = project.version
+	inputs.property "version", version
+
+	filesMatching("fabric.mod.json") {
+		expand "version": version
+	}
+}

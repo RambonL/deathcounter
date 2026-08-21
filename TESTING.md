@@ -1,6 +1,7 @@
 # Testing plan
 
-Written 2026-08-21, alongside [MULTILOADER.md](MULTILOADER.md).
+Written 2026-08-21, alongside [MULTILOADER.md](MULTILOADER.md), and updated the
+same day when the NeoForge port landed.
 
 ## The premise
 
@@ -21,6 +22,11 @@ Minecraft classes usable in a plain unit test.
 dependencies { testImplementation "net.fabricmc:fabric-loader-junit:${project.loader_version}" }
 test { useJUnitPlatform() }
 ```
+
+They live in the Fabric subproject, which pulls `src/test/java` in the same way
+the loader projects pull `src/main/java`. The code under test is the shared
+tree, so running them again on the NeoForge side would test the same classes
+twice.
 
 Anything touching registries — `ComponentSerialization.CODEC` in our case —
 needs Minecraft brought up first:
@@ -49,13 +55,13 @@ package-private helpers without anything being made public for their sake.
 | `Death.unknown` / `isUnknown` | The `timestamp == 0` convention the import and `tp` both depend on. |
 | `count` / `cause` / `time` | Pure string work, cheap to pin down. |
 
-### Refactors this needs
+### Refactors this needed
 
-Three, each smaller than the tests it unlocks:
+Three, each smaller than the tests it unlocked:
 
 1. `Config.init(Path configDir)` sets the config path; `load()` reads it. Tests
-   point at a `@TempDir` instead of the real `config/`. This is step 1 of
-   MULTILOADER.md anyway — the `FabricLoader` import moves to `DeathCounter`.
+   point at a `@TempDir` instead of the real `config/`. This was step 1 of the
+   NeoForge port anyway — the `FabricLoader` import moved to the entrypoint.
 2. `Config.maySeeCoords(UUID viewer, UUID target, boolean admin)` next to the
    existing `CommandSourceStack` overload, which becomes a one-line wrapper.
    A `CommandSourceStack` cannot be built headless, a UUID can. **Still exactly
@@ -67,18 +73,28 @@ Plus: the pure helpers in `DeathCommands` drop `private` for package-private,
 and the page arithmetic in `history` moves into a `window(size, page)` method
 so it can be tested without a command context.
 
-## Level 2 — one smoke script per loader (do this with the NeoForge port)
+## Level 2 — the console smoke pass, once per loader
 
-This is the answer to "more loaders, more testing". Roughly twenty lines of
-shell on top of the FIFO trick from `CLAUDE.md`:
+This is the answer to "more loaders, more testing", and it is short. With the
+FIFO trick from `CLAUDE.md`, start the server and feed it three commands:
 
-start the server → `scoreboard objectives list` → `help deaths` → `stop` → grep
-the log for exceptions, check that `config/deathcounter.json` and
-`world/data/deathcounter/deaths.dat` exist.
+```
+scoreboard objectives list      # SERVER_STARTED / ServerStartedEvent fired
+deaths top                      # commands registered, SavedData read
+deathsadmin import              # the vanilla statistics path works
+stop                            # and the console itself is reachable
+```
 
-Covers the mod loading, the entrypoint firing, command registration, the server
-lifecycle hook, the config path and the SavedData directory — that is nearly the
-whole loader-specific surface.
+On a world that already has deaths, both loaders must print the same numbers —
+they read the same file. Then check `config/deathcounter.json` exists in `run/`
+and grep the log for exceptions.
+
+That covers mod loading, the entrypoint, command registration, the lifecycle
+hook, the config path and the SavedData directory: nearly the whole
+loader-specific surface, minus the death hook, which needs a player.
+
+Not scripted yet. It is four lines into a FIFO and the numbers have to be read
+by a human anyway, so a script would mostly be a wrapper around `grep`.
 
 ## Level 3 — game tests: skipped
 
@@ -93,8 +109,18 @@ still not easy to stage. Revisit if the mod ever touches blocks or world state.
 
 The unit tests cover the data model and the rules. Everything that needs a live
 player — the death hook, the scoreboard, command execution, permissions,
-persistence across a restart — does not run headless. Once per loader before a
-release, with `runServer` plus `runClientAlpha` (op) and `runClientBravo`:
+persistence across a restart — does not run headless.
+
+Run the list below in full on one loader before a release. On the other, only
+points 1, 6 and 12 have to be repeated: the death hook, the coordinate gate end
+to end and persistence are the ones sitting on loader-specific wiring, and
+everything else is the same bytecode reached through the same Brigadier tree.
+Point 1 is worth the attention on NeoForge, since `LivingDeathEvent` fires at a
+different moment than Fabric's `AFTER_DEATH` — the "death #N" line has to stay
+*below* the vanilla death message.
+
+With `:fabric:runServer` or `:neoforge:runServer` plus `:fabric:runClientAlpha`
+(op) and `:fabric:runClientBravo`:
 
 1. **Death, broadcast, tab list.** Bravo `/kill` → chat says `Bravo — death #1`,
    tab list shows 1. Again → #2.
@@ -128,3 +154,5 @@ release, with `runServer` plus `runClientAlpha` (op) and `runClientBravo`:
     Never `pkill` the server; it dies without saving and looks exactly like a
     persistence bug.
 13. **A vanilla client connects** and sees the tab list column and the chat line.
+    A Fabric client against the NeoForge server counts: the mod adds no payloads
+    and no registries, so what it speaks is the plain vanilla protocol.

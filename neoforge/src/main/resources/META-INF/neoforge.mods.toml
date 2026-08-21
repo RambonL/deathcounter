@@ -1,0 +1,26 @@
+modLoader = "javafml"
+loaderVersion = "[4,)"
+license = "LGPL-3.0-only"
+issueTrackerURL = "https://github.com/RambonL/mcmod-deathcounter/issues"
+
+[[mods]]
+modId = "deathcounter"
+version = "${version}"
+displayName = "DeathCounter"
+authors = "RambonL."
+iconFile = "assets/deathcounter/icon.png"
+description = '''Server-side death counter with full history, coordinates and tab list display.'''
+
+[[dependencies.deathcounter]]
+modId = "neoforge"
+type = "required"
+versionRange = "[26.2,)"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.deathcounter]]
+modId = "minecraft"
+type = "required"
+versionRange = "[26.2,26.3)"
+ordering = "NONE"
+side = "BOTH"

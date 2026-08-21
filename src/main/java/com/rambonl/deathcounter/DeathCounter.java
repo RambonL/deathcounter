@@ -1,11 +1,6 @@
 package com.rambonl.deathcounter;
 
-import net.fabricmc.api.ModInitializer;
-import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
-import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
-import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
-import net.fabricmc.loader.api.FabricLoader;
+import java.nio.file.Path;
 
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
@@ -24,24 +19,24 @@ import net.minecraft.world.scores.criteria.ObjectiveCriteria;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class DeathCounter implements ModInitializer {
+/**
+ * Everything the mod does, minus the wiring. The loader entrypoints call {@link #init} once and
+ * hand the four hooks below to whatever event API they have — nothing in this package imports a
+ * loader. See MULTILOADER.md.
+ */
+public class DeathCounter {
 	public static final String MOD_ID = "deathcounter";
 	public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
 	/** Scoreboard objective backing the tab list column. */
 	private static final String OBJECTIVE = "deathcounter";
 
-	@Override
-	public void onInitialize() {
-		Config.init(FabricLoader.getInstance().getConfigDir());
-
-		CommandRegistrationCallback.EVENT.register((dispatcher, registries, environment) -> DeathCommands.register(dispatcher));
-		ServerLifecycleEvents.SERVER_STARTED.register(DeathCounter::setUpObjective);
-		ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> syncScore(server, handler.player));
-		ServerLivingEntityEvents.AFTER_DEATH.register(DeathCounter::onDeath);
+	/** @param configDir the loader's config directory, the one thing only the loader knows */
+	public static void init(Path configDir) {
+		Config.init(configDir);
 	}
 
-	private static void onDeath(LivingEntity entity, DamageSource source) {
+	public static void onDeath(LivingEntity entity, DamageSource source) {
 		if (!(entity instanceof ServerPlayer player)) {
 			return;
 		}
@@ -58,7 +53,12 @@ public class DeathCounter implements ModInitializer {
 
 		data.add(player, death);
 		syncScore(server, player);
-		broadcast(server, player, data.count(player.getUUID()), death);
+
+		int count = data.count(player.getUUID());
+		// Queued rather than sent straight away, because NeoForge's LivingDeathEvent fires at the
+		// start of die() and vanilla's death message is still ahead of us. Running at the end of
+		// the tick puts our line below it on both loaders.
+		server.execute(() -> broadcast(server, player, count, death));
 	}
 
 	/**
@@ -85,7 +85,7 @@ public class DeathCounter implements ModInitializer {
 	}
 
 	/** Creates the objective, and claims the tab list slot only if nothing else already holds it. */
-	private static void setUpObjective(MinecraftServer server) {
+	public static void setUpObjective(MinecraftServer server) {
 		ServerScoreboard scoreboard = server.getScoreboard();
 		Objective objective = scoreboard.getObjective(OBJECTIVE);
 
@@ -103,7 +103,7 @@ public class DeathCounter implements ModInitializer {
 	 * Writes our count into the scoreboard. Our file is the truth, the scoreboard is only the
 	 * display, so anything edited there is overwritten on the next join or death.
 	 */
-	static void syncScore(MinecraftServer server, ServerPlayer player) {
+	public static void syncScore(MinecraftServer server, ServerPlayer player) {
 		Objective objective = server.getScoreboard().getObjective(OBJECTIVE);
 
 		if (objective != null) {

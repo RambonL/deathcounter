@@ -1,76 +1,44 @@
-# Multi-loader plan — Fabric + NeoForge
+# Multi-loader layout — Fabric + NeoForge
 
-Not implemented yet. Written 2026-08-21 against NeoForge 26.2.0.64 (stable) and
-ModDevGradle 2.0.144.
+Implemented 2026-08-21 against NeoForge 26.2.0.64 and ModDevGradle 2.0.144.
+Two jars, one source tree.
 
-## Why this is cheap
+## Why it is cheap
 
-After step 1 the shared code has **no loader imports at all**. Only two places
-are loader-specific today:
+The shared code has **no loader imports at all**. `DeathData` (SavedData,
+codecs), `DeathCommands` (Brigadier, `LevelResource`, `ServerStatsCounter`),
+`Config` and the scoreboard handling are plain vanilla, and MC 26.2 is Mojmap on
+both loaders — the same classes compile twice with no remapping step.
 
-- `DeathCounter.java:3-7` — four Fabric imports, four event registrations
-- `Config.java:33` — `FabricLoader.getInstance().getConfigDir()`
-
-`DeathData` (SavedData, codecs), `DeathCommands` (Brigadier, `LevelResource`,
-`ServerStatsCounter`) and the scoreboard handling are plain vanilla. MC 26.2 is
-Mojmap on both loaders, so those classes compile unchanged for both.
-
-## Step 1 — pull the loader out of the core
-
-`Config.java`: the config path stops being a constant.
-
-```java
-private static Path file;                       // was: static final FILE via FabricLoader
-
-public static void load(Path configDir) {
-    file = configDir.resolve(DeathCounter.MOD_ID + ".json");
-    ...
-}
-```
-
-`save()` uses `file`. The Fabric import goes.
-
-`DeathCounter.java`: drop `implements ModInitializer` and the four imports.
-`onInitialize()` becomes
-
-```java
-public static void init(Path configDir) { Config.load(configDir); }
-```
-
-and `setUpObjective`, `syncScore` and `onDeath` widen from `private static` to
-`public static`. Wiring the events becomes each loader's job.
-
-## Step 2 — Gradle: two subprojects, one source tree
-
-No Architectury, no `common` module. Both loader projects pull in the same
-source directory:
+What is loader-specific is one entrypoint per loader, about thirty lines each.
 
 ```
-settings.gradle              include 'fabric', 'neoforge'
-src/main/java/…              shared, stays where it is
-src/main/resources/assets/   shared icon.png
-fabric/build.gradle          Loom  + sourceSets.main.java.srcDir "../src/main/java"
+settings.gradle                                     include 'fabric', 'neoforge'
+build.gradle                                        subprojects { } — java, licenses, publishing
+src/main/java/…                                     the mod, loader-free
+src/main/resources/assets/deathcounter/icon.png     shared
+src/test/java/…                                     pulled in by fabric only
+
+fabric/build.gradle                                 Loom
 fabric/src/main/java/…/FabricEntry.java
-fabric/src/main/resources/fabric.mod.json          (moved)
-neoforge/build.gradle        ModDevGradle 2.0.144 + the same srcDir
+fabric/src/main/resources/fabric.mod.json
+
+neoforge/build.gradle                               ModDevGradle
 neoforge/src/main/java/…/NeoForgeEntry.java
 neoforge/src/main/resources/META-INF/neoforge.mods.toml
 ```
 
-The root `build.gradle` keeps Java 25, the `jar` license block, `withSourcesJar`
-and `publishing` in a `subprojects { }`. `settings.gradle` additionally needs the
-NeoForged maven in `pluginManagement`.
+Both subprojects add `rootProject.file("src/main/java")` as a source directory.
+No Architectury, no `common` module: for four event registrations a shared
+`srcDir` is smaller, and it stays smaller until there are mixins, client code or
+custom registries.
 
-**Point `runDir` at `../run`** (and `../run/alpha|bravo|charlie`), otherwise the
-dev world and `run/ops.json` are orphaned.
+Jars land in `fabric/build/libs/deathcounter-fabric-<version>.jar` and
+`neoforge/build/libs/deathcounter-neoforge-<version>.jar`. `base.archivesName`
+is set in the root `subprojects { }` block, otherwise both would be named after
+their subproject.
 
-## Step 3 — entrypoints
-
-`FabricEntry`: the four registrations as they are today, with
-`DeathCounter.init(FabricLoader.getInstance().getConfigDir())`.
-
-`NeoForgeEntry`: `@Mod("deathcounter")`, everything on `NeoForge.EVENT_BUS` (the
-game bus, not the mod bus).
+## The event mapping
 
 | Fabric | NeoForge |
 | --- | --- |
@@ -79,45 +47,39 @@ game bus, not the mod bus).
 | `ServerPlayConnectionEvents.JOIN` | `PlayerEvent.PlayerLoggedInEvent` (cast to `ServerPlayer`) |
 | `ServerLivingEntityEvents.AFTER_DEATH` | `LivingDeathEvent` at `EventPriority.LOWEST` |
 | `FabricLoader…getConfigDir()` | `FMLPaths.CONFIGDIR.get()` |
+| `environment: "server"` | `@Mod(dist = Dist.DEDICATED_SERVER)` |
 
-Two traps with `LivingDeathEvent`:
+NeoForge listeners go on `NeoForge.EVENT_BUS`, the game bus. The mod bus only
+carries loading events and none of ours are on it.
 
-1. It fires *before* the death and is cancellable. `LOWEST` plus NeoForge's
-   default of skipping remaining listeners on a cancelled event means we only
-   run when the death actually goes through — same guarantee as Fabric's
-   `AFTER_DEATH`.
-2. It fires at the start of `die()`, so vanilla's death message comes later and
-   our "death #N" line would print before it. Wrap the broadcast in
-   `server.execute(…)` so it lands at the end of the tick and the order matches
-   Fabric again.
+## The two traps in `LivingDeathEvent`
 
-## Step 4 — `neoforge.mods.toml`
+1. It fires *before* the death and is cancellable, so it is not the equivalent
+   of `AFTER_DEATH` on its own. `EventPriority.LOWEST` plus the bus default of
+   not delivering cancelled events means we only run when the death actually
+   goes through.
+2. It fires at the start of `die()`, so vanilla's death message comes *after*
+   it and our "death #N" line would print above it. The broadcast therefore goes
+   through `server.execute(…)` and lands at the end of the tick — on Fabric that
+   changes nothing, since vanilla's line is already out by then.
 
-`modLoader="javafml"`, `license="LGPL-3.0-only"`, dependencies on `neoforge` and
-on `minecraft` `[26.2,26.3)`. Server side: `side="SERVER"` on the Minecraft
-dependency, and a `displayTest` that does not reject vanilla clients. The mod
-registers no payloads and no registries, so a NeoForge server accepts vanilla
-clients anyway — the hard rule stays intact.
+## Gradle differences worth knowing
 
-## Step 5 — verify and document
-
-- `./gradlew :fabric:runServer` and `:neoforge:runServer`, vanilla client on
-  each: death → chat line, tab list, `/deaths`, restart → data still there.
-- **Look the NeoForge class names up in the actual jar**, do not write them from
-  memory — same `unzip -l | grep` trick as for Minecraft, once ModDevGradle has
-  downloaded it.
-- `PLAN.md`, `README.md`, `CLAUDE.md`, `MODRINTH.md`: "Fabric mod" becomes
-  "Fabric/NeoForge", build commands get the subproject prefix. The Modrinth
-  version gets `neoforge` as a second loader.
-
-## Cost
-
-Roughly 80 new lines, 15 changed.
+- **Loom wires stdin through, ModDevGradle does not.** Without
+  `tasks.named("runServer") { standardInput = System.in }` the NeoForge console
+  ignores everything typed at it, `stop` included, and the only way out is a
+  signal. Costs a world save if you find out the hard way.
+- Both run configurations point at `../run`, so the dev world, `ops.json` and
+  `server.properties` are shared and either loader can boot the same save.
+- No client run on the NeoForge side: the mod is dedicated-server only, so a
+  NeoForge client would not load it anyway. `:fabric:runClientAlpha` and friends
+  connect to both servers.
+- `logoFile` in `neoforge.mods.toml` is deprecated in 26.2 — it is `iconFile`
+  now. `displayTest` is gone entirely; a mod with no payloads and no registries
+  accepts vanilla clients without saying so.
 
 ## Deliberately out of scope
 
-- **Architectury / a common module.** Worth it once there are mixins, client
-  code or custom registries. For four event registrations a shared `srcDir` is
-  smaller.
+- **Architectury / a common module.** See above.
 - **Quilt.** Loads `fabric.mod.json` as is, nothing to do.
 - **Paper/Spigot.** Different API, no shared code — a rewrite, not a port.

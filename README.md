@@ -1,7 +1,7 @@
 # DeathCounter
 
-A server-side Fabric mod that counts player deaths and keeps the full history:
-when, where, and what killed them.
+A server-side mod for Fabric and NeoForge that counts player deaths and keeps
+the full history: when, where, and what killed them.
 
 **Install it on the server only.** Players connect with an unmodified client —
 everything travels over the vanilla protocol (scoreboard, chat, tab list,
@@ -24,21 +24,23 @@ commands), so there is nothing to install on their side.
 | | |
 |---|---|
 | Minecraft | 26.2 |
-| Fabric Loader | 0.19.3 or newer |
-| Fabric API | required |
 | Java | 25 |
+| Fabric | Loader 0.19.3 or newer, plus Fabric API |
+| NeoForge | 26.2.0.57 or newer, nothing else |
 
 ## Installation
 
-1. Download the jar from
-   [Modrinth](https://modrinth.com/mod/deathcounter-server), or build it
-   yourself with `./gradlew build` — it lands in `build/libs/`. The
-   `-sources.jar` next to it is the source code and does not belong on a server.
-2. Drop it into the server's `mods/` folder, next to Fabric API.
+1. Download the jar for your loader from
+   [Modrinth](https://modrinth.com/mod/deathcounter-server) — `-fabric-` or
+   `-neoforge-`, they are not interchangeable. Or build both yourself with
+   `./gradlew build`; they land in `fabric/build/libs/` and
+   `neoforge/build/libs/`. The `-sources.jar` next to each is the source code
+   and does not belong on a server.
+2. Drop it into the server's `mods/` folder — on Fabric, next to Fabric API.
 3. Restart the server. It creates `config/deathcounter.json` on first start.
 
-Server only. The mod declares itself server-side, so a client that has it
-installed anyway simply never starts it.
+Server only. The mod declares itself server-side on both loaders, so a client
+that has it installed anyway simply never starts it.
 
 ## Commands
 
@@ -138,9 +140,16 @@ scoreboard is rewritten from it on every join and death.
 ## Development
 
 ```
-./gradlew runServer     # test server in run/
-./gradlew clean build   # rebuild from scratch
+./gradlew build                 # both jars
+./gradlew :fabric:runServer     # test server in run/
+./gradlew :neoforge:runServer   # the same run/, the same world
+./gradlew clean build           # rebuild from scratch
 ```
+
+The mod itself lives in `src/main/java` and imports no loader at all. `fabric/`
+and `neoforge/` compile that same tree and add an entrypoint of about thirty
+lines each — see `MULTILOADER.md`. A change to the counting, the commands or the
+storage is written once and ships on both.
 
 The mod version and every dependency version live in `gradle.properties`, not in
 `build.gradle`.

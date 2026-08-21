@@ -12,7 +12,7 @@
 	"environment": "server",
 	"entrypoints": {
 		"main": [
-			"com.rambonl.deathcounter.DeathCounter"
+			"com.rambonl.deathcounter.FabricEntry"
 		]
 	},
 	"depends": {

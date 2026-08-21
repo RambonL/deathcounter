@@ -1,7 +1,8 @@
 # DeathCounter — Design & Implementation Plan
 
-Server-side Fabric mod for MC 26.2. Counts player deaths, stores the full
-history including coordinates, shows the counter in the tab list and in chat.
+Server-side mod for MC 26.2, on Fabric and NeoForge. Counts player deaths,
+stores the full history including coordinates, shows the counter in the tab list
+and in chat.
 
 ## Status
 
@@ -13,20 +14,31 @@ history including coordinates, shows the counter in the tab list and in chat.
 - [x] Test with `./gradlew runServer` and a vanilla client
 - [x] Import from vanilla statistics (`/deathsadmin import`)
 - [x] Headless JUnit tests — see [TESTING.md](TESTING.md)
+- [x] NeoForge alongside Fabric — see [MULTILOADER.md](MULTILOADER.md)
 
 ## Principles
 
-- **Server-side only.** `environment: "server"`, no custom packets, no custom
-  registries — vanilla clients must be able to connect.
-- **No mixins.** Fabric API covers everything we need. `ExampleMixin` and
-  `deathcounter.mixins.json` are deleted.
+- **Server-side only.** `environment: "server"` / `Dist.DEDICATED_SERVER`, no
+  custom packets, no custom registries — vanilla clients must be able to
+  connect.
+- **No mixins.** Both loaders have an event for everything we need.
+  `ExampleMixin` and `deathcounter.mixins.json` are deleted.
 - **No new dependencies.** Gson ships with Minecraft, Brigadier with the
   server, SavedData is vanilla.
+- **One source tree.** `src/main/java` imports no loader; `fabric/` and
+  `neoforge/` compile it and supply an entrypoint each. See
+  [MULTILOADER.md](MULTILOADER.md).
 
 ## Death capture
 
-`ServerLivingEntityEvents.AFTER_DEATH`, filtered to `ServerPlayer`. The event
-fires before respawn, so the entity is still at the death position.
+Fabric: `ServerLivingEntityEvents.AFTER_DEATH`, filtered to `ServerPlayer`. The
+event fires before respawn, so the entity is still at the death position.
+
+NeoForge: `LivingDeathEvent` at `EventPriority.LOWEST`. That one fires *before*
+the death and is cancellable, but listeners skip cancelled events by default, so
+running last gives the same guarantee. It also runs ahead of vanilla's death
+message, which is why the broadcast goes through `server.execute(…)` and lands
+at the end of the tick on both loaders.
 
 ## Data model
 
@@ -161,7 +173,8 @@ More keys only when actually needed — broadcast and tab list are fixed.
 - **Chat broadcast to everyone** on each death, as a *second* line below the
   vanilla death message: `Rambo — death #42`. Vanilla sends its own message
   from `ServerPlayer#die()`; replacing it would need a mixin, so we do not.
-  Coordinates only in `PUBLIC` mode.
+  Queued with `server.execute(…)` so it stays below that line on NeoForge too,
+  see above. Coordinates only in `PUBLIC` mode.
 
 ## Commands
 

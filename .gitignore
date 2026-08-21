@@ -1,6 +1,6 @@
-# Gradle
+# Gradle. Not anchored: the loader subprojects have build directories too.
 /.gradle/
-/build/
+build/
 
 # Machine-specific Claude Code permissions. CLAUDE.md and PLAN.md are project
 # documentation and belong in the repo.
@@ -9,8 +9,9 @@
 # Screenshots taken while testing
 /pics/
 
-# Minecraft's logger writes here once Bootstrap runs, which the tests do.
-/logs/
+# Minecraft's logger writes here once Bootstrap runs, which the tests do. Not
+# anchored either: the tests run from the fabric subproject.
+logs/
 # Dev server. The world and the logs are local scratch; only the files a fresh
 # clone needs to boot a test server are tracked.
 /run/*

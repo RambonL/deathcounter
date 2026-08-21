@@ -1,0 +1,50 @@
+plugins {
+	id 'net.neoforged.moddev' version "${moddev_version}"
+}
+
+// The shared tree is added in the root build.gradle; only the entrypoint lives here.
+
+neoForge {
+	// To change the versions see the gradle.properties file. The NeoForge version pins the
+	// Minecraft version with it, so minecraft_version is not repeated here.
+	version = project.neoforge_version
+
+	// Without this the run tasks start a bare Minecraft and the mod is never loaded.
+	mods {
+		deathcounter {
+			sourceSet sourceSets.main
+		}
+	}
+
+	// The dev world, ops.json and server.properties live in the repo root, so both loaders share
+	// one test setup and the same world can be booted on either.
+	//
+	// No client run: the mod is dedicated-server only, so a NeoForge client would not load it
+	// anyway. Connect with :fabric:runClientAlpha and friends — the server speaks the vanilla
+	// protocol, which is also the check that vanilla clients still get in.
+	runs {
+		server {
+			server()
+			gameDirectory = rootProject.file("run")
+			programArguments.addAll("--nogui")
+		}
+	}
+}
+
+// No test source set here: the tests cover the shared code, which is identical on both loaders,
+// so they run on the Fabric side only. See TESTING.md.
+
+// ModDevGradle does not wire stdin through, so the server console swallows everything typed at it
+// — including `stop`. Loom does this for us; here it has to be said out loud.
+tasks.named("runServer") {
+	standardInput = System.in
+}
+
+processResources {
+	def version = project.version
+	inputs.property "version", version
+
+	filesMatching("META-INF/neoforge.mods.toml") {
+		expand "version": version
+	}
+}
