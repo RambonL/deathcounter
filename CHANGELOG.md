@@ -1,7 +1,20 @@
 # Changelog
 
 All notable changes to DeathCounter. Versions are `<mod>+<minecraft>`, and the
-Minecraft part is not a suffix to ignore: a jar built for 26.2 runs on 26.2.
+Minecraft part is not a suffix to ignore: each jar targets exactly that Minecraft
+feature release.
+
+## 1.1.0+26.3 — 2026-09-27
+
+### Changed
+
+- Updated both loader builds from Minecraft 26.2 to 26.3.
+- Fabric now targets Loader 0.19.5 and Fabric API 0.161.0+26.3.
+- NeoForge now targets 26.3.0.23-beta. No additional dependency is required.
+
+Commands, config and storage are unchanged. Existing
+`world/data/deathcounter/deaths.dat` files carry over, including when switching
+between Fabric and NeoForge.
 
 ## 1.1.0+26.2 — 2026-08-21
 

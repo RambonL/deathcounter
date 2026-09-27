@@ -1,6 +1,6 @@
 # DeathCounter
 
-Server-side mod for Fabric and NeoForge, MC 26.2. Counts player deaths with full
+Server-side mod for Fabric and NeoForge, MC 26.3. Counts player deaths with full
 history and coordinates.
 
 **Read `PLAN.md` for the design and current status before touching code.**
@@ -84,13 +84,13 @@ Java 25, use the Gradle wrapper. Versions live in `gradle.properties`, not in
 
 ## Names
 
-MC 26.1 dropped obfuscation, so 26.2 ships Mojang's real names — no Yarn, no
+MC 26.1 dropped obfuscation, so 26.3 ships Mojang's real names — no Yarn, no
 intermediary, no remapping step. Class and method names in `PLAN.md` are still
 conceptual: look them up instead of writing them from memory.
 
 ```
 unzip -l ~/.gradle/caches/fabric-loom/minecraftMaven/net/minecraft/\
-minecraft-merged-deobf/26.2/minecraft-merged-deobf-26.2.jar | grep ServerPlayer
+minecraft-merged-deobf/26.3/minecraft-merged-deobf-26.3.jar | grep ServerPlayer
 ```
 
 The same goes for NeoForge's own classes. Its jar is in the Gradle cache once
@@ -99,5 +99,5 @@ faster than any wiki page:
 
 ```
 unzip -l ~/.gradle/caches/modules-2/files-2.1/net.neoforged/neoforge/\
-26.2.0.64/*/neoforge-26.2.0.64-universal.jar | grep LivingDeathEvent
+26.3.0.23-beta/*/neoforge-26.3.0.23-beta-universal.jar | grep LivingDeathEvent
 ```

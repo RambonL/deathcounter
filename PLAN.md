@@ -1,6 +1,6 @@
 # DeathCounter — Design & Implementation Plan
 
-Server-side mod for MC 26.2, on Fabric and NeoForge. Counts player deaths,
+Server-side mod for MC 26.3, on Fabric and NeoForge. Counts player deaths,
 stores the full history including coordinates, shows the counter in the tab list
 and in chat.
 

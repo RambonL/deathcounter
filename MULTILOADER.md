@@ -1,13 +1,15 @@
 # Multi-loader layout — Fabric + NeoForge
 
 Implemented 2026-08-21 against NeoForge 26.2.0.64 and ModDevGradle 2.0.144.
+Verified on 2026-09-27 against Minecraft 26.3, NeoForge 26.3.0.23-beta and
+ModDevGradle 2.0.147.
 Two jars, one source tree.
 
 ## Why it is cheap
 
 The shared code has **no loader imports at all**. `DeathData` (SavedData,
 codecs), `DeathCommands` (Brigadier, `LevelResource`, `ServerStatsCounter`),
-`Config` and the scoreboard handling are plain vanilla, and MC 26.2 is Mojmap on
+`Config` and the scoreboard handling are plain vanilla, and MC 26.3 is Mojmap on
 both loaders — the same classes compile twice with no remapping step.
 
 What is loader-specific is one entrypoint per loader, about thirty lines each.

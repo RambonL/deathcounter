@@ -23,10 +23,10 @@ commands), so there is nothing to install on their side.
 
 | | |
 |---|---|
-| Minecraft | 26.2 |
+| Minecraft | 26.3 |
 | Java | 25 |
-| Fabric | Loader 0.19.3 or newer, plus Fabric API |
-| NeoForge | 26.2.0.57 or newer, nothing else |
+| Fabric | Loader 0.19.5 or newer, plus Fabric API |
+| NeoForge | 26.3.0.23-beta or newer for Minecraft 26.3, nothing else |
 
 ## Installation
 
