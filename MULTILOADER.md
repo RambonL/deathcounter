@@ -3,7 +3,8 @@
 Implemented 2026-08-21 against NeoForge 26.2.0.64 and ModDevGradle 2.0.144.
 Verified on 2026-09-27 against Minecraft 26.3, NeoForge 26.3.0.23-beta and
 ModDevGradle 2.0.147.
-Two jars, one source tree.
+Two loader projects, one source tree, and since 2026-10-07 one jar that runs on
+both.
 
 ## Why it is cheap
 
@@ -39,6 +40,17 @@ Jars land in `fabric/build/libs/deathcounter-fabric-<version>.jar` and
 `neoforge/build/libs/deathcounter-neoforge-<version>.jar`. `base.archivesName`
 is set in the root `subprojects { }` block, otherwise both would be named after
 their subproject.
+
+`build/libs/deathcounter-<version>.jar` is the two zipped into one, built by
+`universalJar` in the root `build.gradle`, and runs on either loader. That works
+because nothing is remapped since 26.1: the shared classes are byte-identical in
+both jars, Fabric only reads `fabric.mod.json` and loads `FabricEntry`, NeoForge
+only reads `neoforge.mods.toml` and finds `@Mod` on `NeoForgeEntry` by scanning
+bytecode. It stops working the day one loader needs a mixin config, an access
+widener or a nested jar the other chokes on. Verified on 2026-10-07 on a
+production Fabric server and a production NeoForge server, not just `runServer`
+— the run tasks load the classes from the source set and never see this jar.
+The procedure and the results are in [TESTING.md](TESTING.md).
 
 ## The event mapping
 

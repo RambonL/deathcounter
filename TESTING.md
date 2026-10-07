@@ -96,6 +96,82 @@ loader-specific surface, minus the death hook, which needs a player.
 Not scripted yet. It is four lines into a FIFO and the numbers have to be read
 by a human anyway, so a script would mostly be a wrapper around `grep`.
 
+## The universal jar — production servers, not `runServer`
+
+`build/libs/deathcounter-<version>.jar` is never on a dev classpath: the run
+tasks load the classes from the source set. Testing it means a real server per
+loader with the jar in `mods/`:
+
+- **Fabric:** the server launcher from
+  `meta.fabricmc.net/v2/versions/loader/<mc>/<loader>/<installer>/server/jar`,
+  plus the Fabric API jar from the Gradle cache.
+- **NeoForge:** `neoforge-<version>-installer.jar --installServer`, then
+  `run.sh nogui`.
+
+Both outside the repo, each on its own port, with `eula=true`,
+`online-mode=false` and **`white-list=false`** — a fresh 26.3 server writes
+`white-list=true` and turns the dev clients away. The clients need no clicking:
+
+```
+./gradlew --project-cache-dir <dir> :fabric:runClientAlpha \
+    --args="--quickPlayMultiplayer localhost:<port>"
+```
+
+Everything else goes through the console FIFO. `execute as Alpha run deaths
+last` runs a command with Alpha as the viewer, which is enough for the
+coordinate gate; it keeps the console's permission level, so it cannot show
+that a non-op is refused `/deathsadmin`. `gamerule immediate_respawn true` lets
+one player die repeatedly, `damage Alpha 1000 minecraft:lava` gives causes other
+than `/kill` (leave four seconds after a respawn, the invulnerability window
+swallows it otherwise), and `difficulty peaceful` keeps slimes on a flat world
+from adding deaths of their own.
+
+### Pass of 2026-10-07 — Alpha and Bravo
+
+Fabric Loader 0.19.5 with Fabric API 0.161.0+26.3, and NeoForge 26.3.0.23-beta.
+Run on the jar as built at 1.1.0+26.3; the released 1.1.1+26.3 differs only in
+the version string and was booted on both servers afterwards, on the worlds
+this pass left behind. The same jar on both; the two console transcripts were diffed against each
+other and differ only in timestamps and positions, apart from the first finding
+below.
+
+| | Fabric | NeoForge |
+|---|---|---|
+| Mod listed at startup, `config/deathcounter.json` created | ok | ok |
+| Deaths counted and broadcast: `/kill`, lava, fall, magic, slain by Bravo | ok | ok |
+| The broadcast reaches the other player's client | ok | ok |
+| `deaths`, `deaths <player>` with causes, `deaths top` | ok | ok |
+| `history` paging at 14 deaths; a page past the end shows the last one | ok | ok |
+| Coordinates under `SELF`: own yes, others no, console no, `deathsadmin` yes | ok | ok |
+| `PUBLIC`: others see them, the broadcast carries ` at x y z` | ok | ok |
+| `HIDDEN`: not even one's own, `deathsadmin` still yes | ok | ok |
+| Nether death carries `(the_nether)` | ok | ok |
+| `deathsadmin tp` across dimensions; refused for the console and a bad number | ok | ok |
+| `reset` preview and `confirm`, score back to 0 | ok | ok |
+| `import` preview and `confirm`, imported deaths have no location, second run finds nothing | ok | ok |
+| `config coords`, file written, `reload` after a hand edit, broken file keeps the old value | ok | ok |
+| Objective `Deaths`; a falsified score is overwritten on the next death | ok | ok |
+| A falsified score is overwritten on join | ok | ok |
+| Lookup of a player who is offline | ok | ok |
+| Restart: deaths and config survive | ok | ok |
+| World written by the other loader loads with every death | ok | ok |
+
+Findings, none of them specific to the universal jar:
+
+- **Broadcast order on NeoForge.** For a death caused from the console, the
+  "death #N" line lands *above* vanilla's death message on NeoForge and below it
+  on Fabric. `DeathCounter.onDeath` defers the broadcast with `server.execute`,
+  which presumably runs it on the spot when the death does not come out of a
+  queued task. A player's own `/kill` is such a task, which is what the manual
+  list below checks, so that case is not contradicted — but deaths from the
+  server tick (mobs, the console) were not looked at separately. Open.
+- **`deaths Nobody`** answers `nobody has never died.` on both loaders, for a
+  name the server has never seen.
+
+Not covered by this pass, still manual: a non-op being refused `/deathsadmin`,
+the tab list column as the client draws it, clickable coordinates and tab
+completion.
+
 ## Level 3 — game tests: skipped
 
 Fabric (`fabricApi.configureTests`, `CustomTestMethodInvoker`) and NeoForge

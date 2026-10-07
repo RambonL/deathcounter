@@ -4,6 +4,19 @@ All notable changes to DeathCounter. Versions are `<mod>+<minecraft>`, and the
 Minecraft part is not a suffix to ignore: each jar targets exactly that Minecraft
 feature release.
 
+## 1.1.1+26.3 — 2026-10-07
+
+### Added
+
+- **One jar for both loaders.** `deathcounter-1.1.1+26.3.jar` runs on Fabric and
+  on NeoForge; there is no longer a jar to pick. The requirements stay per
+  loader: Fabric still wants Fabric API, NeoForge nothing else.
+
+No code changed — the jar is the two loader builds zipped together, which works
+because nothing has been remapped since Minecraft 26.1. Commands, config and
+storage are the same, and a server running a `-fabric-` or `-neoforge-` jar can
+swap it for this one in place.
+
 ## 1.1.0+26.3 — 2026-09-27
 
 ### Changed

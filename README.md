@@ -30,12 +30,13 @@ commands), so there is nothing to install on their side.
 
 ## Installation
 
-1. Download the jar for your loader from
-   [Modrinth](https://modrinth.com/mod/deathcounter-server) — `-fabric-` or
-   `-neoforge-`, they are not interchangeable. Or build both yourself with
-   `./gradlew build`; they land in `fabric/build/libs/` and
-   `neoforge/build/libs/`. The `-sources.jar` next to each is the source code
-   and does not belong on a server.
+1. Download the jar from
+   [Modrinth](https://modrinth.com/mod/deathcounter-server). Since 1.1.1 it is
+   one jar for both loaders; older versions come as `-fabric-` and `-neoforge-`,
+   which are not interchangeable. Or build it yourself with `./gradlew build`;
+   it lands in `build/libs/`, with the per-loader jars in `fabric/build/libs/`
+   and `neoforge/build/libs/`. The `-sources.jar` next to those is the source
+   code and does not belong on a server.
 2. Drop it into the server's `mods/` folder — on Fabric, next to Fabric API.
 3. Restart the server. It creates `config/deathcounter.json` on first start.
 
@@ -140,7 +141,7 @@ scoreboard is rewritten from it on every join and death.
 ## Development
 
 ```
-./gradlew build                 # both jars
+./gradlew build                 # both jars, plus one for both loaders in build/libs
 ./gradlew :fabric:runServer     # test server in run/
 ./gradlew :neoforge:runServer   # the same run/, the same world
 ./gradlew clean build           # rebuild from scratch

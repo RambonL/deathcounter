@@ -21,8 +21,9 @@ commands), so there is nothing to install on their side.
 
 ## Installation
 
-1. Take the jar for your loader — `-fabric-` or `-neoforge-`, they are not
-   interchangeable — and drop it into the server's `mods/` folder.
+1. Drop the jar into the server's `mods/` folder. Since 1.1.1 it is one jar for
+   both loaders; older versions come as `-fabric-` and `-neoforge-`, which are
+   not interchangeable.
 2. Restart. It creates `config/deathcounter.json` on first start.
 
 On Fabric it needs Fabric API; on NeoForge nothing else. Nothing to install on

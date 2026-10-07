@@ -20,7 +20,8 @@ player-facing messages.
 ## Build
 
 ```
-./gradlew build                 # both jars, in fabric/build/libs and neoforge/build/libs
+./gradlew build                 # both jars, in fabric/build/libs and neoforge/build/libs,
+                                # plus one for both loaders in build/libs
 ./gradlew test                  # headless JUnit only, seconds — see TESTING.md
 ./gradlew :fabric:runServer     # test server in run/
 ./gradlew :neoforge:runServer   # the same run/, the same world

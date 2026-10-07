@@ -1,8 +1,10 @@
 // The mod itself lives in src/main/java and imports no loader at all. Each subproject compiles
 // that same tree against its own loader and ships its own jar. See MULTILOADER.md.
 //
-// The root project builds nothing on its own — everything below is what the two loader projects
-// have in common.
+// The root project compiles nothing on its own — the subprojects block is what the two loader
+// projects have in common, and universalJar below zips their two jars into one.
+apply plugin: 'base'
+
 subprojects {
 	apply plugin: 'java'
 	apply plugin: 'maven-publish'
@@ -49,3 +51,20 @@ subprojects {
 		}
 	}
 }
+
+// One jar that runs on both loaders. Nothing is remapped since 26.1, so the shared classes are
+// byte-identical in both jars and only the entrypoint and the metadata file differ. Fabric reads
+// fabric.mod.json and loads FabricEntry; NeoForge reads neoforge.mods.toml and finds @Mod on
+// NeoForgeEntry by scanning bytecode. Neither ever loads the other's entrypoint.
+tasks.register('universalJar', Jar) {
+	// Without the java plugin a Jar task lands in build/distributions.
+	destinationDirectory = layout.buildDirectory.dir('libs')
+	subprojects.each { sub ->
+		dependsOn sub.tasks.named('jar')
+		from(zipTree(sub.tasks.named('jar').flatMap { it.archiveFile }))
+	}
+	// Loom's manifest attributes describe the Fabric build only; this jar gets a plain one.
+	exclude 'META-INF/MANIFEST.MF'
+	duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+assemble.dependsOn universalJar

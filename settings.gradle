@@ -16,6 +16,6 @@ pluginManagement {
 // Should match your modid
 rootProject.name = 'deathcounter'
 
-// One source tree, one jar per loader. See MULTILOADER.md.
+// One source tree, one project per loader. See MULTILOADER.md.
 include 'fabric'
 include 'neoforge'
