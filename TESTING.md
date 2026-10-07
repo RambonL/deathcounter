@@ -93,8 +93,9 @@ That covers mod loading, the entrypoint, command registration, the lifecycle
 hook, the config path and the SavedData directory: nearly the whole
 loader-specific surface, minus the death hook, which needs a player.
 
-Not scripted yet. It is four lines into a FIFO and the numbers have to be read
-by a human anyway, so a script would mostly be a wrapper around `grep`.
+For a release, `scripts/loader-test.sh` does this and a great deal more against
+production servers — see below. The four lines are still the quick look while
+working on something.
 
 ## The universal jar — production servers, not `runServer`
 
@@ -171,6 +172,81 @@ Findings, none of them specific to the universal jar:
 Not covered by this pass, still manual: a non-op being refused `/deathsadmin`,
 the tab list column as the client draws it, clickable coordinates and tab
 completion.
+
+### Scripted since 1.2.0: `scripts/loader-test.sh`
+
+Everything above, and the comparing, is now one command:
+
+```
+scripts/loader-test.sh            # Fabric, NeoForge and Paper side by side, then each on the others' worlds
+scripts/loader-test.sh paper      # one loader, about three and a half minutes
+```
+
+It builds the jar, downloads the three servers once into
+`~/.cache/deathcounter-loader-test` (versions from `gradle.properties`), starts
+them on ports 25601 to 25603 with two dev clients each, sends the commands and
+matches what the console prints. A line per check, `ok` or `FAIL` with the
+output it got instead; the exit status is the number of failures. All three
+together take five and a half minutes, six game windows and a lot of memory.
+
+`note` lines are findings that are known and not the mod's to fix. They do not
+count as failures, and they are there so nobody has to rediscover them.
+
+Things the script had to learn, each of which looked like a mod bug first:
+
+- **A dead player still answers to their name.** `kill Alpha` on a corpse prints
+  "Killed Alpha" and nobody dies. The script asks `execute if entity
+  @e[type=player,name=Alpha]` before every death — `@e` only selects the living
+  — instead of sleeping and hoping.
+- **`/kill` straight after a death by `/damage` can do nothing on Paper**, alive
+  check or not. One retry, and only if vanilla announced no death either.
+- **On Paper 26.3 build 159 a player killed in the nether never respawns** with
+  `immediate_respawn` on. With no plugin installed as well; checked. The nether
+  death is therefore each player's last.
+- **The import needs a `save-all` first.** It finds players by their statistics
+  file, which a fresh player does not have until the world saves.
+- **Six Gradle clients must not build.** Each has its own project cache, so each
+  would redo `compileJava` and `processResources` into the same `fabric/build`,
+  and a client starting meanwhile reads half a `fabric.mod.json`. They run with
+  `-x` on both.
+
+Not in the script, because the console cannot see it: a non-op being refused
+`/deathsadmin`, the tab list column as drawn, clickable coordinates and tab
+completion. That is the manual list below.
+
+### Pass of 2026-10-07 on 1.2.0+26.3 — Fabric, NeoForge, Paper
+
+Paper 26.3 build 159 next to the two above. 211 checks, 0 failed: the 18 rows
+of the table above, on all three loaders, with the same expectations.
+
+The first Paper pass, by hand and on the jar as it was before, found two bugs
+that are fixed in shared code since — see MULTILOADER.md:
+
+- `/deathsadmin import` threw `NoSuchMethodError` on Paper.
+- A restart on Paper lost every death: the load failed on the `null` data fixer
+  type, and the next save wrote an empty `deaths.dat` over the old one.
+
+Worlds across loaders, each loader booting the world another one wrote in this
+pass and finding 14 and 3 deaths in it:
+
+| written by ↓ / booted on → | Fabric | NeoForge | Paper |
+|---|---|---|---|
+| Fabric | | ok | ok |
+| NeoForge | ok | | ok |
+| Paper | does not boot | does not boot | |
+
+A world Paper has written is in Paper's layout; Fabric and NeoForge stop with
+`Failed to load datapacks` / `Overworld settings missing`. `deaths.dat` is in
+the same place in all three, so this is about the world around it. The worlds
+of the 1.1.1 pass, written with no fixer type, were booted on 1.2.0 as well and
+kept their counts.
+
+Notes from the run:
+
+- **Broadcast order** on NeoForge and Paper: "death #N" above vanilla's line for
+  a death caused from the console, below it on Fabric. The open finding from
+  above, now with Paper on NeoForge's side.
+- **Nether respawn on Paper**, as described.
 
 ## Level 3 — game tests: skipped
 

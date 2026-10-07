@@ -1,15 +1,15 @@
 // The mod itself lives in src/main/java and imports no loader at all. Each subproject compiles
 // that same tree against its own loader and ships its own jar. See MULTILOADER.md.
 //
-// The root project compiles nothing on its own — the subprojects block is what the two loader
-// projects have in common, and universalJar below zips their two jars into one.
+// The root project compiles nothing on its own — the subprojects block is what the loader
+// projects have in common, and universalJar below zips their jars into one.
 apply plugin: 'base'
 
 subprojects {
 	apply plugin: 'java'
 	apply plugin: 'maven-publish'
 
-	// Otherwise both jars would be named after their subproject: fabric-1.0.1.jar.
+	// Otherwise the jars would be named after their subproject: fabric-1.0.1.jar.
 	base.archivesName = "${rootProject.name}-${project.name}"
 
 	sourceSets.main.java.srcDir rootProject.file("src/main/java")
@@ -52,10 +52,11 @@ subprojects {
 	}
 }
 
-// One jar that runs on both loaders. Nothing is remapped since 26.1, so the shared classes are
-// byte-identical in both jars and only the entrypoint and the metadata file differ. Fabric reads
+// One jar that runs on every loader. Nothing is remapped since 26.1, so the shared classes are
+// byte-identical in all jars and only the entrypoint and the metadata file differ. Fabric reads
 // fabric.mod.json and loads FabricEntry; NeoForge reads neoforge.mods.toml and finds @Mod on
-// NeoForgeEntry by scanning bytecode. Neither ever loads the other's entrypoint.
+// NeoForgeEntry by scanning bytecode; Paper reads paper-plugin.yml and loads PaperEntry. None of
+// them ever loads another's entrypoint.
 tasks.register('universalJar', Jar) {
 	// Without the java plugin a Jar task lands in build/distributions.
 	destinationDirectory = layout.buildDirectory.dir('libs')
@@ -66,5 +67,24 @@ tasks.register('universalJar', Jar) {
 	// Loom's manifest attributes describe the Fabric build only; this jar gets a plain one.
 	exclude 'META-INF/MANIFEST.MF'
 	duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+
+	// EXCLUDE keeps the first copy of a class and drops the rest without looking. That is only
+	// right while every loader compiles the shared tree to the same bytes. A loader that patches a
+	// vanilla signature — Paper did, with PlayerList#getPlayerStats — yields a class that links on
+	// that loader only, and the jar would fail at runtime on the others, in that one code path.
+	doFirst {
+		def seen = [:]
+		subprojects.each { sub ->
+			zipTree(sub.tasks.named('jar').get().archiveFile).matching { include '**/*.class' }.visit { f ->
+				if (f.directory) return
+				def digest = f.file.bytes.digest('SHA-256')
+				def first = seen.putIfAbsent(f.path, [sub.name, digest])
+				if (first != null && first[1] != digest) {
+					throw new GradleException("${f.path} differs between ${first[0]} and ${sub.name}: " +
+							"the shared code calls something the loaders declare differently")
+				}
+			}
+		}
+	}
 }
 assemble.dependsOn universalJar

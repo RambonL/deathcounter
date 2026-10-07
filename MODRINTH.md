@@ -1,6 +1,6 @@
 # DeathCounter
 
-A server-side mod for Fabric and NeoForge that counts player deaths and keeps
+A server-side mod for Fabric, NeoForge and Paper that counts player deaths and keeps
 the full history: when, where, and what killed them.
 
 **Install it on the server only.** Players connect with an unmodified client —
@@ -21,13 +21,15 @@ commands), so there is nothing to install on their side.
 
 ## Installation
 
-1. Drop the jar into the server's `mods/` folder. Since 1.1.1 it is one jar for
-   both loaders; older versions come as `-fabric-` and `-neoforge-`, which are
-   not interchangeable.
-2. Restart. It creates `config/deathcounter.json` on first start.
+1. Drop the jar into the server's `mods/` folder on Fabric and NeoForge, or
+   into `plugins/` on Paper. It is one jar for all three; versions before 1.1.1
+   come as `-fabric-` and `-neoforge-`, which are not interchangeable, and Paper
+   needs 1.2.0 or newer.
+2. Restart. It creates `config/deathcounter.json` on first start —
+   `plugins/DeathCounter/deathcounter.json` on Paper.
 
-On Fabric it needs Fabric API; on NeoForge nothing else. Nothing to install on
-clients either way.
+On Fabric it needs Fabric API; on NeoForge and Paper nothing else. Nothing to
+install on clients either way. Paper only, not Spigot, and not Folia.
 
 ## Commands
 

@@ -1,15 +1,15 @@
 # DeathCounter
 
-Server-side mod for Fabric and NeoForge, MC 26.3. Counts player deaths with full
+Server-side mod for Fabric, NeoForge and Paper, MC 26.3. Counts player deaths with full
 history and coordinates.
 
 **Read `PLAN.md` for the design and current status before touching code.**
 
 ## Layout
 
-One source tree, two loader projects. `src/main/java` holds the whole mod and
-imports no loader at all; `fabric/` and `neoforge/` each pull that same
-directory in and add an entrypoint of roughly thirty lines. New code goes in
+One source tree, three loader projects. `src/main/java` holds the whole mod and
+imports no loader at all; `fabric/`, `neoforge/` and `paper/` each pull that
+same directory in and add an entrypoint of thirty to sixty lines. New code goes in
 `src/main/java` unless it is event wiring. See `MULTILOADER.md`.
 
 ## Language
@@ -20,9 +20,11 @@ player-facing messages.
 ## Build
 
 ```
-./gradlew build                 # both jars, in fabric/build/libs and neoforge/build/libs,
-                                # plus one for both loaders in build/libs
+./gradlew build                 # one jar per loader in <loader>/build/libs, plus one for
+                                # all three in build/libs
 ./gradlew test                  # headless JUnit only, seconds — see TESTING.md
+scripts/loader-test.sh          # the release check: production servers on all three loaders,
+                                # two clients each, ~6 min and six game windows — see TESTING.md
 ./gradlew :fabric:runServer     # test server in run/
 ./gradlew :neoforge:runServer   # the same run/, the same world
 ```
@@ -34,8 +36,10 @@ classes twice. Every test class extends `BootstrappedTest`: the registries throw
 before `Bootstrap.bootStrap()`, one JVM is shared by all test classes, and a
 class that fails to initialize stays failed for the whole run.
 
-Both loaders point their run directory at `run/`, so the same world, `ops.json`
-and `server.properties` serve both. Run one server at a time.
+Fabric and NeoForge point their run directory at `run/`, so the same world,
+`ops.json` and `server.properties` serve both. Run one server at a time. Paper
+has no run task: boot a real Paper server with the jar in `plugins/`, as
+described in `TESTING.md`.
 
 Three prepared clients with fixed usernames, each in its own run directory:
 `:fabric:runClientAlpha`, `:fabric:runClientBravo`, `:fabric:runClientCharlie`.
@@ -74,12 +78,13 @@ Java 25, use the Gradle wrapper. Versions live in `gradle.properties`, not in
   entrypoint. Vanilla clients must be able to connect — anything that does not
   travel over the vanilla protocol (scoreboard, chat, tab list, Brigadier) is
   off limits.
-- **No loader imports in `src/main/java`.** That tree compiles against both
-  loaders; anything Fabric- or NeoForge-specific belongs in the entrypoints, and
-  a hook added to one has to be added to the other.
+- **No loader imports in `src/main/java`.** That tree compiles against all
+  three loaders; anything Fabric-, NeoForge- or Paper-specific belongs in the
+  entrypoints, and a hook added to one has to be added to the others. On Paper
+  that includes `org.bukkit` — the shared code talks to the vanilla server.
 - **No new dependencies.** Gson ships with Minecraft, Brigadier with the
   server, persistence via vanilla `SavedData`. Fabric API is a given.
-- **No mixins** as long as both loaders have an event for it.
+- **No mixins** as long as every loader has an event for it.
 - **Coordinates only through `maySeeCoords(source, targetUuid, admin)`.** There
   is exactly one check. Anything that prints coordinates around it leaks them.
 

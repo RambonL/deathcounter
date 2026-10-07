@@ -424,8 +424,10 @@ public final class DeathCommands {
 		ServerPlayer online = server.getPlayerList().getPlayer(uuid);
 
 		// The constructor parses the file and runs it through the data fixer, so old worlds work too.
+		// getStats() rather than PlayerList#getPlayerStats: Paper changed that one's parameter type,
+		// and a class compiled against one signature does not link against the other.
 		ServerStatsCounter counter = online != null
-				? server.getPlayerList().getPlayerStats(online)
+				? online.getStats()
 				: new ServerStatsCounter(server, stats.resolve(uuid + ".json"));
 
 		return counter.getValue(Stats.CUSTOM.get(Stats.DEATHS));

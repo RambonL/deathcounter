@@ -1,6 +1,6 @@
 # DeathCounter
 
-A server-side mod for Fabric and NeoForge that counts player deaths and keeps
+A server-side mod for Fabric, NeoForge and Paper that counts player deaths and keeps
 the full history: when, where, and what killed them.
 
 **Install it on the server only.** Players connect with an unmodified client —
@@ -27,21 +27,30 @@ commands), so there is nothing to install on their side.
 | Java | 25 |
 | Fabric | Loader 0.19.5 or newer, plus Fabric API |
 | NeoForge | 26.3.0.23-beta or newer for Minecraft 26.3, nothing else |
+| Paper | 26.3 build 159 or newer, nothing else. Not Spigot, not Folia |
 
 ## Installation
 
 1. Download the jar from
-   [Modrinth](https://modrinth.com/mod/deathcounter-server). Since 1.1.1 it is
-   one jar for both loaders; older versions come as `-fabric-` and `-neoforge-`,
-   which are not interchangeable. Or build it yourself with `./gradlew build`;
-   it lands in `build/libs/`, with the per-loader jars in `fabric/build/libs/`
-   and `neoforge/build/libs/`. The `-sources.jar` next to those is the source
-   code and does not belong on a server.
-2. Drop it into the server's `mods/` folder — on Fabric, next to Fabric API.
-3. Restart the server. It creates `config/deathcounter.json` on first start.
+   [Modrinth](https://modrinth.com/mod/deathcounter-server). It is one jar for
+   all three loaders; versions before 1.1.1 come as `-fabric-` and `-neoforge-`,
+   which are not interchangeable, and Paper needs 1.2.0 or newer. Or build it
+   yourself with `./gradlew build`; it lands in `build/libs/`, with the
+   per-loader jars in `fabric/build/libs/`, `neoforge/build/libs/` and
+   `paper/build/libs/`. The `-sources.jar` next to those is the source code and
+   does not belong on a server.
+2. Drop it into the server's `mods/` folder — on Fabric, next to Fabric API. On
+   Paper it goes into `plugins/` instead.
+3. Restart the server. It creates `config/deathcounter.json` on first start; on
+   Paper that file is `plugins/DeathCounter/deathcounter.json`.
 
-Server only. The mod declares itself server-side on both loaders, so a client
-that has it installed anyway simply never starts it.
+Server only. The mod declares itself server-side on Fabric and NeoForge, so a
+client that has it installed anyway simply never starts it.
+
+On Paper it is a plugin that talks to the vanilla server underneath rather than
+to the Bukkit API. That is what lets one code base serve all three, and it means
+a Paper build that changes those internals can break it — Paper makes no
+promise about them. Folia is not supported.
 
 ## Commands
 
@@ -101,7 +110,8 @@ recorded, since the imported ones go in front — run it once, early.
 
 ## Configuration
 
-`config/deathcounter.json`, created with defaults on first start:
+`config/deathcounter.json` (Paper: `plugins/DeathCounter/deathcounter.json`),
+created with defaults on first start:
 
 ```json
 {
@@ -131,6 +141,13 @@ Inside the world folder on purpose: restore the world from a backup and the
 deaths come back with it, copy the world and they follow, run a second world and
 it gets its own counter.
 
+That includes changing loaders. Fabric and NeoForge read each other's worlds in
+both directions, and Paper reads theirs, deaths included. Paper converts a world
+to its own layout, though, and Fabric and NeoForge no longer boot it afterwards
+(`Overworld settings missing`) — that is Paper's world format, not this mod's
+file, which stays where it was. Back the world up before moving it to
+Paper.
+
 A death costs about 576 bytes there, so twenty players at five hundred deaths
 each is roughly 700 KB on disk. Only what changed is encoded, and only when
 somebody actually died.
@@ -141,16 +158,17 @@ scoreboard is rewritten from it on every join and death.
 ## Development
 
 ```
-./gradlew build                 # both jars, plus one for both loaders in build/libs
+./gradlew build                 # one jar per loader, plus one for all three in build/libs
 ./gradlew :fabric:runServer     # test server in run/
 ./gradlew :neoforge:runServer   # the same run/, the same world
 ./gradlew clean build           # rebuild from scratch
+scripts/loader-test.sh          # the release check on real servers, all three loaders
 ```
 
-The mod itself lives in `src/main/java` and imports no loader at all. `fabric/`
-and `neoforge/` compile that same tree and add an entrypoint of about thirty
-lines each — see `MULTILOADER.md`. A change to the counting, the commands or the
-storage is written once and ships on both.
+The mod itself lives in `src/main/java` and imports no loader at all. `fabric/`,
+`neoforge/` and `paper/` compile that same tree and add an entrypoint of thirty
+to sixty lines each — see `MULTILOADER.md`. A change to the counting, the
+commands or the storage is written once and ships on all three.
 
 The mod version and every dependency version live in `gradle.properties`, not in
 `build.gradle`.

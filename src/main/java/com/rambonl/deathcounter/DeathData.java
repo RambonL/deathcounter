@@ -10,6 +10,7 @@ import net.minecraft.network.chat.ComponentSerialization;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.util.datafix.DataFixTypes;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.level.saveddata.SavedDataType;
@@ -78,9 +79,16 @@ public class DeathData extends SavedData {
 			.fieldOf("players")
 			.codec();
 
-	/** The null is the data fixer type: vanilla's migration mechanism, which our data has none of. */
+	/**
+	 * The last argument is the data fixer type, vanilla's migration mechanism, which our data has
+	 * none of. It still cannot be null: vanilla calls it unchecked, and only Fabric API and NeoForge
+	 * patch that. On Paper a null fails the load, the file counts as missing, and the next save
+	 * overwrites it with an empty one. Command storage is the type no fixer has ever touched — it is
+	 * free-form data to vanilla as well — so it passes ours through unchanged.
+	 */
 	public static final SavedDataType<DeathData> TYPE = new SavedDataType<>(
-			DeathCounter.id("deaths"), () -> new DeathData(Map.of()), CODEC, null);
+			DeathCounter.id("deaths"), () -> new DeathData(Map.of()), CODEC,
+			DataFixTypes.SAVED_DATA_COMMAND_STORAGE);
 
 	// ponytail: uncapped history, all of it in memory, and every Death keeps the vanilla message as
 	// a full component tree including the click and hover events on the killer's name (~100 bytes

@@ -1,0 +1,24 @@
+plugins {
+	id 'io.papermc.paperweight.userdev' version "${paperweight_version}"
+}
+
+// The shared tree is added in the root build.gradle; only the entrypoint lives here.
+
+// The dev bundle is Paper's patched server, internals included. The shared tree is written against
+// net.minecraft, not against the Bukkit API, so paper-api alone would not compile it. Nothing is
+// remapped since 26.1, so the plain jar is the one that ships.
+dependencies {
+	paperweight.paperDevBundle(project.paper_version)
+}
+
+// No run task and no tests here: the tests cover the shared code and run on the Fabric side only,
+// and a Paper server is booted by hand with the jar in plugins/. See TESTING.md.
+
+processResources {
+	def version = project.version
+	inputs.property "version", version
+
+	filesMatching("paper-plugin.yml") {
+		expand "version": version
+	}
+}

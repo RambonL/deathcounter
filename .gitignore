@@ -1,5 +1,6 @@
-# Gradle. Not anchored: the loader subprojects have build directories too.
-/.gradle/
+# Gradle. Not anchored: the loader subprojects have build directories too, and
+# paperweight keeps a patched Minecraft server in paper/.gradle.
+.gradle/
 build/
 
 # Machine-specific Claude Code permissions. CLAUDE.md and PLAN.md are project

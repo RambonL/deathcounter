@@ -1,0 +1,7 @@
+name: DeathCounter
+version: "${version}"
+main: com.rambonl.deathcounter.PaperEntry
+api-version: "26.3"
+description: Server-side death counter with full history, coordinates and tab list display.
+authors: [RambonL]
+website: https://github.com/RambonL/mcmod-deathcounter

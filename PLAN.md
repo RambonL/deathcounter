@@ -1,6 +1,6 @@
 # DeathCounter — Design & Implementation Plan
 
-Server-side mod for MC 26.3, on Fabric and NeoForge. Counts player deaths,
+Server-side mod for MC 26.3, on Fabric, NeoForge and Paper. Counts player deaths,
 stores the full history including coordinates, shows the counter in the tab list
 and in chat.
 
@@ -15,6 +15,7 @@ and in chat.
 - [x] Import from vanilla statistics (`/deathsadmin import`)
 - [x] Headless JUnit tests — see [TESTING.md](TESTING.md)
 - [x] NeoForge alongside Fabric — see [MULTILOADER.md](MULTILOADER.md)
+- [x] Paper as a third loader, same jar — see [MULTILOADER.md](MULTILOADER.md)
 
 ## Principles
 
@@ -25,8 +26,8 @@ and in chat.
   `ExampleMixin` and `deathcounter.mixins.json` are deleted.
 - **No new dependencies.** Gson ships with Minecraft, Brigadier with the
   server, SavedData is vanilla.
-- **One source tree.** `src/main/java` imports no loader; `fabric/` and
-  `neoforge/` compile it and supply an entrypoint each. See
+- **One source tree.** `src/main/java` imports no loader; `fabric/`,
+  `neoforge/` and `paper/` compile it and supply an entrypoint each. See
   [MULTILOADER.md](MULTILOADER.md).
 
 ## Death capture
@@ -73,8 +74,12 @@ Not `ServerLevel#getDataStorage()` — that one is per dimension and lands in
 `world/dimensions/<ns>/<path>/data/`, which would mean one counter for the
 overworld, one for the nether and one for the end.
 
-`SavedDataType` takes a nullable data fixer type as its fourth argument; we
-pass `null` because our data has no legacy formats to migrate.
+`SavedDataType` takes a data fixer type as its fourth argument. Our data has no
+legacy formats to migrate, but `null` is not an option: vanilla calls the type
+unchecked, only Fabric API and NeoForge patch that, and on Paper the load then
+fails and the next save overwrites the file with an empty one. We pass
+`DataFixTypes.SAVED_DATA_COMMAND_STORAGE`, which only two schemas declare and no
+fixer references, so the data passes through unchanged.
 
 Full history, no cap. Call `setDirty()` only on death and on config change —
 if nothing changed, vanilla skips the write.

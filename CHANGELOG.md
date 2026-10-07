@@ -4,6 +4,32 @@ All notable changes to DeathCounter. Versions are `<mod>+<minecraft>`, and the
 Minecraft part is not a suffix to ignore: each jar targets exactly that Minecraft
 feature release.
 
+## 1.2.0+26.3 — 2026-10-07
+
+### Added
+
+- **Paper.** The same jar now also runs on Paper 26.3: drop it into `plugins/`
+  instead of `mods/`. Commands, storage and the tab list column are the same as
+  on Fabric and NeoForge; the config file is
+  `plugins/DeathCounter/deathcounter.json`. Not Spigot, not Folia.
+- `scripts/loader-test.sh` runs the release check on production servers of all
+  three loaders and compares what they print.
+- The build fails if a shared class compiles to different bytes on two loaders,
+  since the one jar can only carry one copy of it.
+
+### Changed
+
+- `deaths.dat` is registered with a data fixer type instead of none. Fabric API
+  and NeoForge accept none; vanilla and Paper do not. Existing files load as
+  before.
+- `/deathsadmin import` reads an online player's counter from the player itself
+  rather than through the player list, whose signature Paper changed.
+
+A world written on Fabric or NeoForge loads on Paper with every death. The way
+back is not ours to give: Paper converts the world to its own layout on first
+start, and a Fabric or NeoForge server refuses the result with `Overworld
+settings missing`. Keep a backup of the world before trying Paper on it.
+
 ## 1.1.1+26.3 — 2026-10-07
 
 ### Added
