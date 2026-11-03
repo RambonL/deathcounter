@@ -1,0 +1,63 @@
+plugins {
+	id 'net.neoforged.moddev.legacyforge' version "${moddev_version}"
+}
+
+// The shared tree is added in the root build.gradle; only the entrypoint lives here.
+//
+// Minecraft 1.20.1 is obfuscated. The code is written against Mojang's names, and reobfJar turns
+// the jar into SRG names, which is what Forge runs on. The jar in build/libs is that reobfuscated
+// one and the one to ship; the plain jar goes to build/devlibs.
+
+legacyForge {
+	version = "${minecraft_version}-${forge_version}"
+
+	// Without this the run tasks start a bare Minecraft and the mod is never loaded.
+	mods {
+		deathcounter {
+			sourceSet sourceSets.main
+		}
+	}
+
+	// Own game directory: run/ holds main's 26.3 world, and 1.20.1 cannot load a newer world.
+	//
+	// The clients run Forge without this mod, the way a modpack player's game does when only the
+	// server has it. -Pjoin=host:port sends them straight onto a server, which is how
+	// scripts/loader-test.sh starts them: --args would replace the arguments ModDevGradle sets.
+	def join = providers.gradleProperty("join").map { ["--quickPlayMultiplayer", it] }.orElse([])
+	runs {
+		server {
+			server()
+			gameDirectory = rootProject.file("run-1.20.1")
+			programArguments.addAll("--nogui")
+		}
+		clientAlpha {
+			client()
+			gameDirectory = rootProject.file("run-1.20.1/alpha")
+			loadedMods = []
+			programArguments.addAll("--username", "Alpha")
+			programArguments.addAll(join)
+		}
+		clientBravo {
+			client()
+			gameDirectory = rootProject.file("run-1.20.1/bravo")
+			loadedMods = []
+			programArguments.addAll("--username", "Bravo")
+			programArguments.addAll(join)
+		}
+	}
+}
+
+// ModDevGradle does not wire stdin through, so the server console swallows everything typed at it
+// — including `stop`.
+tasks.named("runServer") {
+	standardInput = System.in
+}
+
+processResources {
+	def version = project.version
+	inputs.property "version", version
+
+	filesMatching("META-INF/mods.toml") {
+		expand "version": version
+	}
+}

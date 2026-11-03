@@ -5,15 +5,14 @@ import java.nio.file.Path;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
-import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.ServerScoreboard;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.scores.DisplaySlot;
 import net.minecraft.world.scores.Objective;
+import net.minecraft.world.scores.Scoreboard;
 import net.minecraft.world.scores.criteria.ObjectiveCriteria;
 
 import org.slf4j.Logger;
@@ -22,7 +21,7 @@ import org.slf4j.LoggerFactory;
 /**
  * Everything the mod does, minus the wiring. The loader entrypoints call {@link #init} once and
  * hand the four hooks below to whatever event API they have — nothing in this package imports a
- * loader. See MULTILOADER.md.
+ * loader. See CLAUDE.md.
  */
 public class DeathCounter {
 	public static final String MOD_ID = "deathcounter";
@@ -55,9 +54,9 @@ public class DeathCounter {
 		syncScore(server, player);
 
 		int count = data.count(player.getUUID());
-		// Queued rather than sent straight away, because NeoForge's LivingDeathEvent fires at the
+		// Queued rather than sent straight away, because Forge's LivingDeathEvent fires at the
 		// start of die() and vanilla's death message is still ahead of us. Running at the end of
-		// the tick puts our line below it on both loaders.
+		// the tick puts our line below it.
 		server.execute(() -> broadcast(server, player, count, death));
 	}
 
@@ -81,7 +80,7 @@ public class DeathCounter {
 		String pos = death.pos().getX() + " " + death.pos().getY() + " " + death.pos().getZ();
 		return death.dimension() == Level.OVERWORLD
 				? pos
-				: pos + " (" + death.dimension().identifier().getPath() + ")";
+				: pos + " (" + death.dimension().location().getPath() + ")";
 	}
 
 	/** Creates the objective, and claims the tab list slot only if nothing else already holds it. */
@@ -91,11 +90,11 @@ public class DeathCounter {
 
 		if (objective == null) {
 			objective = scoreboard.addObjective(OBJECTIVE, ObjectiveCriteria.DUMMY, Component.literal("Deaths"),
-					ObjectiveCriteria.RenderType.INTEGER, true, null);
+					ObjectiveCriteria.RenderType.INTEGER);
 		}
 
-		if (scoreboard.getDisplayObjective(DisplaySlot.LIST) == null) {
-			scoreboard.setDisplayObjective(DisplaySlot.LIST, objective);
+		if (scoreboard.getDisplayObjective(Scoreboard.DISPLAY_SLOT_LIST) == null) {
+			scoreboard.setDisplayObjective(Scoreboard.DISPLAY_SLOT_LIST, objective);
 		}
 	}
 
@@ -108,12 +107,8 @@ public class DeathCounter {
 
 		if (objective != null) {
 			server.getScoreboard()
-					.getOrCreatePlayerScore(player, objective)
-					.set(DeathData.get(server).count(player.getUUID()));
+					.getOrCreatePlayerScore(player.getScoreboardName(), objective)
+					.setScore(DeathData.get(server).count(player.getUUID()));
 		}
-	}
-
-	public static Identifier id(String path) {
-		return Identifier.fromNamespaceAndPath(MOD_ID, path);
 	}
 }

@@ -1,10 +1,6 @@
 pluginManagement {
 	repositories {
 		maven {
-			name = 'Fabric'
-			url = 'https://maven.fabricmc.net/'
-		}
-		maven {
 			name = 'NeoForged'
 			url = 'https://maven.neoforged.net/releases'
 		}
@@ -16,7 +12,5 @@ pluginManagement {
 // Should match your modid
 rootProject.name = 'deathcounter'
 
-// One source tree, one project per loader. See MULTILOADER.md.
-include 'fabric'
-include 'neoforge'
-include 'paper'
+// One source tree, one project per loader. On this branch that is Forge 1.20.1 only.
+include 'forge'

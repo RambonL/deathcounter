@@ -23,34 +23,26 @@ commands), so there is nothing to install on their side.
 
 | | |
 |---|---|
-| Minecraft | 26.3 |
-| Java | 25 |
-| Fabric | Loader 0.19.5 or newer, plus Fabric API |
-| NeoForge | 26.3.0.23-beta or newer for Minecraft 26.3, nothing else |
-| Paper | 26.3 build 159 or newer, nothing else. Not Spigot, not Folia |
+| Minecraft | 1.20.1 |
+| Java | 17 |
+| Forge | 47 or newer, nothing else |
+
+This is the 1.20.1 branch. Minecraft 26.3 on Fabric, NeoForge and Paper is on
+`main`.
 
 ## Installation
 
-1. Download the jar from
-   [Modrinth](https://modrinth.com/mod/deathcounter-server). It is one jar for
-   all three loaders; versions before 1.1.1 come as `-fabric-` and `-neoforge-`,
-   which are not interchangeable, and Paper needs 1.2.0 or newer. Or build it
-   yourself with `./gradlew build`; it lands in `build/libs/`, with the
-   per-loader jars in `fabric/build/libs/`, `neoforge/build/libs/` and
-   `paper/build/libs/`. The `-sources.jar` next to those is the source code and
-   does not belong on a server.
-2. Drop it into the server's `mods/` folder — on Fabric, next to Fabric API. On
-   Paper it goes into `plugins/` instead.
-3. Restart the server. It creates `config/deathcounter.json` on first start; on
-   Paper that file is `plugins/DeathCounter/deathcounter.json`.
+1. Download the `+1.20.1` jar from
+   [Modrinth](https://modrinth.com/mod/deathcounter-server). Or build it
+   yourself with `./gradlew build`; it lands in `forge/build/libs/`. The
+   `-sources.jar` next to it is the source code and does not belong on a server,
+   and neither does anything in `forge/build/devlibs/`.
+2. Drop it into the server's `mods/` folder.
+3. Restart the server. It creates `config/deathcounter.json` on first start.
 
-Server only. The mod declares itself server-side on Fabric and NeoForge, so a
-client that has it installed anyway simply never starts it.
-
-On Paper it is a plugin that talks to the vanilla server underneath rather than
-to the Bukkit API. That is what lets one code base serve all three, and it means
-a Paper build that changes those internals can break it — Paper makes no
-promise about them. Folia is not supported.
+Server only. Players need nothing: Forge and vanilla clients without the mod
+join, and the server list shows no mod mismatch. A client that has it installed
+anyway simply never starts it.
 
 ## Commands
 
@@ -134,22 +126,20 @@ immediately with `/deathsadmin config reload`.
 
 ## Storage
 
-Deaths live in `world/data/deathcounter/deaths.dat`, next to vanilla's own saved
+Deaths live in `world/data/deathcounter.dat`, next to vanilla's own saved
 data, and are written whenever the world saves. The history is never trimmed.
 
 Inside the world folder on purpose: restore the world from a backup and the
 deaths come back with it, copy the world and they follow, run a second world and
 it gets its own counter.
 
-That includes changing loaders. Fabric and NeoForge read each other's worlds in
-both directions, and Paper reads theirs, deaths included. Paper converts a world
-to its own layout, though, and Fabric and NeoForge no longer boot it afterwards
-(`Overworld settings missing`) — that is Paper's world format, not this mod's
-file, which stays where it was. Back the world up before moving it to
-Paper.
+Upgrading the world to Minecraft 26.x leaves the deaths behind for now: the
+newer versions keep them in `world/data/deathcounter/deaths.dat` and do not read
+this file.
 
-A death costs about 576 bytes there, so twenty players at five hundred deaths
-each is roughly 700 KB on disk. Only what changed is encoded, and only when
+A death takes about 400 bytes before the file is compressed, so twenty players
+at five hundred deaths each come to roughly 4 MB of that, and a good deal less
+on disk. Only what changed is encoded, and only when
 somebody actually died.
 
 The tab list number is only a display: the file is the source of truth, and the
@@ -158,23 +148,22 @@ scoreboard is rewritten from it on every join and death.
 ## Development
 
 ```
-./gradlew build                 # one jar per loader, plus one for all three in build/libs
-./gradlew :fabric:runServer     # test server in run/
-./gradlew :neoforge:runServer   # the same run/, the same world
+./gradlew build                 # the jar to ship, in forge/build/libs
+./gradlew :forge:runServer      # test server in run-1.20.1/
 ./gradlew clean build           # rebuild from scratch
-scripts/loader-test.sh          # the release check on real servers, all three loaders
+scripts/loader-test.sh          # the release check on a real Forge server
 ```
 
-The mod itself lives in `src/main/java` and imports no loader at all. `fabric/`,
-`neoforge/` and `paper/` compile that same tree and add an entrypoint of thirty
-to sixty lines each — see `MULTILOADER.md`. A change to the counting, the
-commands or the storage is written once and ships on all three.
+The mod itself lives in `src/main/java` and imports no loader at all; `forge/`
+compiles that tree and adds the entrypoint. Features come from `main`, ported
+to the 1.20.1 API.
 
 The mod version and every dependency version live in `gradle.properties`, not in
 `build.gradle`.
 
-See `CLAUDE.md` for the development setup, including the three prepared clients,
-and `PLAN.md` for the design and the reasoning behind it.
+See `CLAUDE.md` for the development setup, the two prepared clients and how
+changes come over from `main`, and `PLAN.md` for the design and the reasoning
+behind it.
 
 ## License
 

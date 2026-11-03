@@ -1,32 +1,30 @@
 #!/usr/bin/env bash
-# The release check for the universal jar: a production server per loader with the jar in it, two
-# dev clients, every feature driven from the console and compared against what it should print.
-# Afterwards each loader boots the worlds the others wrote. See TESTING.md.
+# The release check for the 1.20.1 jar: a production Forge server with the reobfuscated jar in it,
+# two dev clients running Forge without the mod (as a modpack player's game would), every feature
+# driven from the console and compared against what it should print. See CLAUDE.md.
 #
-#   scripts/loader-test.sh                    all three loaders
-#   scripts/loader-test.sh paper              one of them
-#   scripts/loader-test.sh fabric neoforge    any subset; the world check runs across those given
+#   scripts/loader-test.sh
 #
-# Needs a display, and room: the loaders run side by side, each with a server and two Gradle dev
-# clients, so six game windows and some 15 GB of memory for about four minutes. Servers are
-# downloaded once into $DC_TEST_DIR (default ~/.cache/deathcounter-loader-test) and reused. Each
-# loader's output is printed when all are through; it is in <dir>/<loader>/result.txt while they
-# run. Exit status is the number of failed checks.
+# Needs a display: a server and two game windows for about three minutes. The Forge server is
+# installed once into $DC_TEST_DIR (default ~/.cache/deathcounter-loader-test-1.20.1) and reused.
+# Exit status is the number of failed checks.
 #
 # What it cannot see: a non-op being refused /deathsadmin (the console outranks everyone, and so
 # does `execute as`), and anything the client draws — the tab list column, clickable coordinates,
-# tab completion. Those stay on the manual list in TESTING.md.
+# tab completion. Those stay manual, see CLAUDE.md.
 set -u
 
 REPO=$(cd "$(dirname "$0")/.." && pwd)
-DIR=${DC_TEST_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/deathcounter-loader-test}
-FABRIC_INSTALLER=1.1.2
+DIR=${DC_TEST_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/deathcounter-loader-test-1.20.1}
+# Forge 1.20.1 runs on Java 17, whatever `java` on the PATH is.
+JAVA17=${JAVA17:-/usr/lib/jvm/java-17-openjdk}
 UA='deathcounter-loader-test (https://github.com/RambonL/mcmod-deathcounter)'
 
 prop() { sed -n "s/^$1=//p" "$REPO/gradle.properties"; }
 MC=$(prop minecraft_version)
 VERSION=$(prop version)
-JAR=$REPO/build/libs/deathcounter-$VERSION.jar
+# build/libs holds the reobfuscated jar, the one Forge can run. build/devlibs does not.
+JAR=$REPO/forge/build/libs/deathcounter-forge-$VERSION.jar
 
 # Three numbers, the way the mod prints a position.
 POS='-?[0-9]+ -?[0-9]+ -?[0-9]+'
@@ -42,41 +40,16 @@ fetch() {
 	curl -fsSL --retry 2 -H "User-Agent: $UA" -o "$1" "$2" || { echo "download failed: $2"; exit 99; }
 }
 
-# --- one function per loader: where things go, how it starts, and how to get it -----------------
+# --- the server ---------------------------------------------------------------------------------
 
-setup_fabric() {
-	port=25601; mods=mods; cfg=config/deathcounter.json
-	start=(java -Xmx2G -jar fabric-server.jar nogui)
-	local api="fabric-api-$(prop fabric_api_version).jar"
-	mkdir -p mods
-	[ -f fabric-server.jar ] || fetch fabric-server.jar \
-		"https://meta.fabricmc.net/v2/versions/loader/$MC/$(prop loader_version)/$FABRIC_INSTALLER/server/jar"
-	[ -f "mods/$api" ] || fetch "mods/$api" \
-		"https://maven.fabricmc.net/net/fabricmc/fabric-api/fabric-api/$(prop fabric_api_version)/$api"
-}
-
-setup_neoforge() {
-	port=25602; mods=mods; cfg=config/deathcounter.json
-	start=(sh run.sh nogui)
-	local v; v=$(prop neoforge_version)
+setup_forge() {
+	port=25604; mods=mods; cfg=config/deathcounter.json
+	start=(env "PATH=$JAVA17/bin:$PATH" sh run.sh nogui)
+	local v; v="$MC-$(prop forge_version)"
 	if [ ! -f run.sh ]; then
-		fetch installer.jar "https://maven.neoforged.net/releases/net/neoforged/neoforge/$v/neoforge-$v-installer.jar"
-		java -jar installer.jar --installServer > install.log 2>&1 || { echo "NeoForge install failed, see $PWD/install.log"; exit 99; }
+		fetch installer.jar "https://maven.minecraftforge.net/net/minecraftforge/forge/$v/forge-$v-installer.jar"
+		"$JAVA17/bin/java" -jar installer.jar --installServer > install.log 2>&1 || { echo "Forge install failed, see $PWD/install.log"; exit 99; }
 	fi
-}
-
-setup_paper() {
-	port=25603; mods=plugins; cfg=plugins/DeathCounter/deathcounter.json
-	start=(java -Xmx2G -jar paper.jar nogui)
-	# paper_version is the dev bundle, 26.3.build.159-beta; the server build is the number in it.
-	local build; build=$(prop paper_version | sed -E 's/.*build\.([0-9]+).*/\1/')
-	if [ ! -f "paper-$build.jar" ]; then
-		local url; url=$(curl -fsSL -H "User-Agent: $UA" "https://fill.papermc.io/v3/projects/paper/versions/$MC/builds/$build" \
-			| grep -o '"url":"[^"]*"' | head -1 | cut -d'"' -f4)
-		[ -n "$url" ] || { echo "no download for Paper $MC build $build"; exit 99; }
-		fetch "paper-$build.jar" "$url"
-	fi
-	ln -sf "paper-$build.jar" paper.jar
 }
 
 # --- server and clients -------------------------------------------------------------------------
@@ -107,22 +80,25 @@ halt() {
 	return $rc
 }
 
-# One game directory and one Gradle project cache per loader and player: three Alphas run at once,
-# and they would otherwise share options.txt and block each other on the project lock. The
-# options come from the dev client's directory, so a fresh one does not stop at the first-run
-# screens.
+# One Gradle project cache per player: two clients at once would otherwise block each other on the
+# project lock. Each client keeps its own game directory, run-1.20.1/alpha and run-1.20.1/bravo.
 #
-# -x: Gradle keeps its up-to-date state in the project cache, so each of these six would redo
-# compileJava and processResources into the one fabric/build they all read from, and a client
-# starting meanwhile finds a half-written fabric.mod.json. The build at the top already made both.
+# Gradle keeps its up-to-date state in the project cache, so each client would redo the tasks they
+# share into the one forge/build both read from, and the second would rewrite the Minecraft jars
+# under the first one's running game. prepare() runs those tasks once per cache, one cache after
+# the other, so that by the time the clients start in parallel there is nothing left to redo.
+# Skipping them with -x instead does not work: the run's preparation reads their outputs.
+prepare() {
+	local p
+	for p in Alpha Bravo; do
+		( cd "$REPO" && ./gradlew -q --project-cache-dir "$DIR/gradle-$p" \
+			:forge:downloadAssets ":forge:prepareClient${p}Run" ) || return 1
+	done
+}
+
 client() {
-	local game="$DIR/$loader/game-$1" dev
-	dev="$REPO/run/$(tr '[:upper:]' '[:lower:]' <<< "$1")/options.txt"
-	mkdir -p "$game"
-	[ -f "$game/options.txt" ] || [ ! -f "$dev" ] || cp "$dev" "$game/"
-	( cd "$REPO" && setsid ./gradlew --project-cache-dir "$DIR/gradle-$loader-$1" ":fabric:runClient$1" \
-		-x :fabric:compileJava -x :fabric:processResources \
-		--args="--quickPlayMultiplayer localhost:$port --gameDir $game" > "$DIR/$loader/client-$1.log" 2>&1 & )
+	( cd "$REPO" && setsid ./gradlew --project-cache-dir "$DIR/gradle-$1" ":forge:runClient$1" \
+		-Pjoin="localhost:$port" > "$DIR/$loader/client-$1.log" 2>&1 & )
 }
 
 # The brackets keep the pattern from matching the shell that runs pkill.
@@ -219,7 +195,7 @@ pass() {
 	mkdir -p "$mods"; rm -f "$mods"/deathcounter-*.jar; cp "$JAR" "$mods/"
 	rm -rf world world.x "$cfg" client-*.log
 	echo eula=true > eula.txt
-	# white-list: a fresh 26.3 server writes true and turns the dev clients away.
+	# white-list off, so a server.properties left over with it on cannot turn the dev clients away.
 	printf '%s\n' "server-port=$port" online-mode=false white-list=false 'level-type=minecraft\:flat' > server.properties
 	LOG=console.log; : > "$LOG"
 
@@ -233,7 +209,7 @@ pass() {
 	sleep 6
 
 	# Peaceful keeps slimes on the flat world from adding deaths of their own.
-	say "difficulty peaceful"; say "gamerule immediate_respawn true"
+	say "difficulty peaceful"; say "gamerule doImmediateRespawn true"
 	expect "objective exists" "scoreboard objectives list" '\[Deaths\]'
 	expect "empty leaderboard" "deaths top" 'Nobody has died yet\.'
 	expect "player with no deaths" "execute as Alpha run deaths" 'Alpha has never died\.'
@@ -353,73 +329,15 @@ pass() {
 	fi
 }
 
-# --- worlds across loaders ----------------------------------------------------------------------
-
-# worlds <dst> <src>... — dst boots a copy of the world each src left behind and has to find 14
-# and 3 in it.
-worlds() {
-	local dst=$1 src; shift
-	loader=$dst
-	cd "$DIR/$dst" || exit 99
-	"setup_$dst"
-	for src; do
-		[ -d "$DIR/$src/world/data/deathcounter" ] || { fail "$src left no world to hand on"; continue; }
-		rm -rf world.x; cp -r "../$src/world" world.x; rm -f world.x/session.lock
-		LOG="world-from-$src.log"; : > "$LOG"
-		if boot --world world.x; then
-			expect "world written by $src loads" "deaths top" '1\. Alpha — 14 deaths' '2\. Bravo — 3 deaths'
-		elif [ "$src" = paper ]; then
-			# Paper stores a world in its own layout, and that is not ours to convert back.
-			note "does not boot a world written by paper: $(grep -Eo 'Overworld settings missing|Failed to load datapacks' "$LOG" | head -1)"
-		else
-			fail "does not boot the world written by $src, see $PWD/$LOG"
-		fi
-		halt
-		rm -rf world.x
-	done
-}
-
 # --- main ---------------------------------------------------------------------------------------
 
-# The script runs itself once per loader; these are the two things such a child does.
-case ${1:-} in
-	--pass)   pass "$2"; exit "$FAILED" ;;
-	--worlds) shift; worlds "$@"; exit "$FAILED" ;;
-esac
-
-[ $# -gt 0 ] || set -- fabric neoforge paper
-for l; do
-	case $l in fabric|neoforge|paper) ;; *) echo "unknown loader: $l (fabric, neoforge, paper)"; exit 99 ;; esac
-	mkdir -p "$DIR/$l"; rm -f "$DIR/$l/result.txt" "$DIR/$l/worlds.txt"
-done
+mkdir -p "$DIR/forge"
 
 echo "building $(basename "$JAR")"
 ( cd "$REPO" && ./gradlew -q build ) || { echo "build failed"; exit 99; }
+prepare || { echo "preparing the clients failed"; exit 99; }
 
-# Children stop their servers through the console when they are told to go.
-trap 'kill $(jobs -p) 2>/dev/null; wait' EXIT
-
-echo "running $* side by side, output in $DIR/<loader>/result.txt"
-for l; do "$0" --pass "$l" > "$DIR/$l/result.txt" 2>&1 & done
-wait
-for l; do echo; echo "== $l"; cat "$DIR/$l/result.txt"; done
-
-if [ $# -gt 1 ]; then
-	for l; do
-		others=(); for o; do [ "$o" = "$l" ] || others+=("$o"); done
-		"$0" --worlds "$l" "${others[@]}" > "$DIR/$l/worlds.txt" 2>&1 &
-	done
-	wait
-	for l; do echo; echo "== $l on the others' worlds"; cat "$DIR/$l/worlds.txt"; done
-fi
-
-echo; echo "== summary: $VERSION on $*"
-for l; do
-	for f in result worlds; do
-		[ -f "$DIR/$l/$f.txt" ] && grep -E '^  (FAIL|note) ' "$DIR/$l/$f.txt" | sed "s/^  \(....\)  /  \1  $l: /"
-	done
-done > "$DIR/summary.txt"
-cat "$DIR/summary.txt"
-FAILED=$(grep -c '^  FAIL' "$DIR/summary.txt")
+pass forge
+echo; echo "== summary: $VERSION on Forge $MC"
 echo "  $FAILED failed"
 exit "$FAILED"

@@ -1,5 +1,6 @@
 package com.rambonl.deathcounter;
 
+import com.mojang.authlib.GameProfile;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
@@ -22,7 +23,6 @@ import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.server.players.NameAndId;
 import net.minecraft.stats.ServerStatsCounter;
 import net.minecraft.stats.Stats;
 import net.minecraft.world.level.storage.LevelResource;
@@ -40,7 +40,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
@@ -125,7 +124,7 @@ public final class DeathCommands {
 	/** Same reads with the visibility check lifted, plus the tools only an operator needs. */
 	private static LiteralArgumentBuilder<CommandSourceStack> adminRoot() {
 		return Commands.literal(ADMIN)
-				.requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
+				.requires(source -> source.hasPermission(Commands.LEVEL_GAMEMASTERS))
 				.then(lastNode(true))
 				.then(historyNode(true))
 				.then(Commands.literal("tp")
@@ -190,7 +189,7 @@ public final class DeathCommands {
 		}
 
 		// No header: the vanilla death message already names the player.
-		MutableComponent message = entry(ctx.getSource(), target, deaths.getLast(), deaths.size(), admin);
+		MutableComponent message = entry(ctx.getSource(), target, deaths.get(deaths.size() - 1), deaths.size(), admin);
 
 		ctx.getSource().sendSuccess(() -> message, false);
 		return 1;
@@ -234,7 +233,7 @@ public final class DeathCommands {
 		}
 
 		int pages = pageCount(ranked.size());
-		int current = Math.clamp(page, 1, pages);
+		int current = Math.max(1, Math.min(page, pages));
 		int start = (current - 1) * PAGE_SIZE;
 		int end = Math.min(ranked.size(), start + PAGE_SIZE);
 
@@ -281,13 +280,13 @@ public final class DeathCommands {
 		// The dimension can be gone if a datapack that added it was removed.
 		if (level == null) {
 			ctx.getSource().sendFailure(
-					Component.literal("Dimension " + death.dimension().identifier() + " no longer exists"));
+					Component.literal("Dimension " + death.dimension().location() + " no longer exists"));
 			return 0;
 		}
 
 		// Half a block on X and Z lands in the middle rather than on the corner.
 		player.teleportTo(level, death.pos().getX() + 0.5, death.pos().getY(), death.pos().getZ() + 0.5,
-				Set.of(), player.getYRot(), player.getXRot(), true);
+				player.getYRot(), player.getXRot());
 
 		ctx.getSource().sendSuccess(() -> Component
 				.literal("Teleported to death #" + number + " of " + target.name())
@@ -424,11 +423,9 @@ public final class DeathCommands {
 		ServerPlayer online = server.getPlayerList().getPlayer(uuid);
 
 		// The constructor parses the file and runs it through the data fixer, so old worlds work too.
-		// getStats() rather than PlayerList#getPlayerStats: Paper changed that one's parameter type,
-		// and a class compiled against one signature does not link against the other.
 		ServerStatsCounter counter = online != null
 				? online.getStats()
-				: new ServerStatsCounter(server, stats.resolve(uuid + ".json"));
+				: new ServerStatsCounter(server, stats.resolve(uuid + ".json").toFile());
 
 		return counter.getValue(Stats.CUSTOM.get(Stats.DEATHS));
 	}
@@ -441,7 +438,7 @@ public final class DeathCommands {
 			return known;
 		}
 
-		return server.services().nameToIdCache().get(uuid).map(NameAndId::name).orElse(uuid.toString());
+		return server.getProfileCache().get(uuid).map(GameProfile::getName).orElse(uuid.toString());
 	}
 
 	private static int setVisibility(CommandContext<CommandSourceStack> ctx, Config.CoordVisibility value) {
@@ -489,9 +486,9 @@ public final class DeathCommands {
 			// check already happened in the tree — no second one needed here.
 			if (admin) {
 				coords.withStyle(style -> style
-						.withClickEvent(new ClickEvent.RunCommand(
+						.withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND,
 								command(true, "tp " + target.name() + " " + number)))
-						.withHoverEvent(new HoverEvent.ShowText(
+						.withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT,
 								Component.literal("Teleport here — " + death.causeId()))));
 			}
 
@@ -521,7 +518,7 @@ public final class DeathCommands {
 	/** Stored oldest first, shown newest first: page 1 is the tail, later pages walk backwards. */
 	static Window window(int size, int page) {
 		int pages = pageCount(size);
-		int current = Math.clamp(page, 1, pages);
+		int current = Math.max(1, Math.min(page, pages));
 		int end = size - (current - 1) * PAGE_SIZE;
 
 		return new Window(Math.max(0, end - PAGE_SIZE), end, current, pages);
@@ -578,14 +575,14 @@ public final class DeathCommands {
 	}
 
 	private static Target target(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
-		Collection<NameAndId> profiles = GameProfileArgument.getGameProfiles(ctx, "player");
+		Collection<GameProfile> profiles = GameProfileArgument.getGameProfiles(ctx, "player");
 
 		if (profiles.size() != 1) {
 			throw ERROR_ONE_PLAYER.create();
 		}
 
-		NameAndId profile = profiles.iterator().next();
-		return new Target(profile.id(), profile.name());
+		GameProfile profile = profiles.iterator().next();
+		return new Target(profile.getId(), profile.getName());
 	}
 
 	private static CompletableFuture<Suggestions> suggestTracked(CommandContext<CommandSourceStack> ctx,

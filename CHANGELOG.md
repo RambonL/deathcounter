@@ -4,6 +4,22 @@ All notable changes to DeathCounter. Versions are `<mod>+<minecraft>`, and the
 Minecraft part is not a suffix to ignore: each jar targets exactly that Minecraft
 feature release.
 
+## 1.2.0+1.20.1 — 2026-11-03
+
+First release for Minecraft 1.20.1, on Forge — for the modpacks still on that
+version. Same features and commands as 1.2.0+26.3. Built from the `mc/1.20.1`
+branch.
+
+- Forge 47 or newer. Drop the jar into the server's `mods/`. Clients need
+  nothing: Forge and vanilla clients without the mod join, and the server list
+  shows no mod mismatch.
+- Deaths are stored in `world/data/deathcounter.dat`, the config in
+  `config/deathcounter.json`.
+- NeoForge 1.20.1 descends from Forge and may well run the jar, but that is
+  untested.
+- A world upgraded from 1.20.1 to 26.x leaves its deaths behind for now: the
+  newer versions keep them in a different file.
+
 ## 1.2.0+26.3 — 2026-10-07
 
 ### Added

@@ -5,15 +5,14 @@ import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.UUIDUtil;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtOps;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.ComponentSerialization;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.util.datafix.DataFixTypes;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.saveddata.SavedData;
-import net.minecraft.world.level.saveddata.SavedDataType;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -24,21 +23,29 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Every death ever recorded, stored as {@code world/data/deathcounter/deaths.dat}.
+ * Every death ever recorded, stored as {@code world/data/deathcounter.dat}.
  *
- * <p>Uses the server-wide storage, not {@code ServerLevel#getDataStorage()} — the latter is per
- * dimension and would give us one counter for the overworld, one for the nether and one for the end.
+ * <p>1.20.1 has no server-wide storage; every dimension keeps its own. The overworld's is the one
+ * that always exists, so it holds the whole server's deaths — one file, not one per dimension.
  */
 public class DeathData extends SavedData {
 
 	/** A single death. Never changes once recorded. */
 	public record Death(long timestamp, ResourceKey<Level> dimension, BlockPos pos, String causeId, Component message) {
+		/**
+		 * Components as their JSON text. 1.20.1's own component codec goes through JSON into NBT,
+		 * and NBT lists hold one type only: a death message whose arguments mix strings and
+		 * components would fail to save.
+		 */
+		private static final Codec<Component> MESSAGE_CODEC =
+				Codec.STRING.xmap(Component.Serializer::fromJson, Component.Serializer::toJson);
+
 		public static final Codec<Death> CODEC = RecordCodecBuilder.create(instance -> instance.group(
 				Codec.LONG.fieldOf("timestamp").forGetter(Death::timestamp),
 				Level.RESOURCE_KEY_CODEC.fieldOf("dimension").forGetter(Death::dimension),
 				BlockPos.CODEC.fieldOf("pos").forGetter(Death::pos),
 				Codec.STRING.fieldOf("cause").forGetter(Death::causeId),
-				ComponentSerialization.CODEC.fieldOf("message").forGetter(Death::message)
+				MESSAGE_CODEC.fieldOf("message").forGetter(Death::message)
 		).apply(instance, Death::new));
 
 		/**
@@ -79,17 +86,6 @@ public class DeathData extends SavedData {
 			.fieldOf("players")
 			.codec();
 
-	/**
-	 * The last argument is the data fixer type, vanilla's migration mechanism, which our data has
-	 * none of. It still cannot be null: vanilla calls it unchecked, and only Fabric API and NeoForge
-	 * patch that. On Paper a null fails the load, the file counts as missing, and the next save
-	 * overwrites it with an empty one. Command storage is the type no fixer has ever touched — it is
-	 * free-form data to vanilla as well — so it passes ours through unchanged.
-	 */
-	public static final SavedDataType<DeathData> TYPE = new SavedDataType<>(
-			DeathCounter.id("deaths"), () -> new DeathData(Map.of()), CODEC,
-			DataFixTypes.SAVED_DATA_COMMAND_STORAGE);
-
 	// ponytail: uncapped history, all of it in memory, and every Death keeps the vanilla message as
 	// a full component tree including the click and hover events on the killer's name (~100 bytes
 	// each on disk, considerably more live). Kept because a component renders in each viewer's own
@@ -102,7 +98,22 @@ public class DeathData extends SavedData {
 	}
 
 	public static DeathData get(MinecraftServer server) {
-		return server.getDataStorage().computeIfAbsent(TYPE);
+		return server.overworld().getDataStorage()
+				.computeIfAbsent(DeathData::load, () -> new DeathData(Map.of()), DeathCounter.MOD_ID);
+	}
+
+	/**
+	 * A file that fails to decode throws here. Vanilla logs that and treats the file as missing,
+	 * the same as the codec-based storage on newer versions does.
+	 */
+	static DeathData load(CompoundTag tag) {
+		return CODEC.parse(NbtOps.INSTANCE, tag).getOrThrow(false, DeathCounter.LOGGER::error);
+	}
+
+	/** Vanilla wraps what this returns in a "data" tag and writes the file. */
+	@Override
+	public CompoundTag save(CompoundTag tag) {
+		return (CompoundTag) CODEC.encodeStart(NbtOps.INSTANCE, this).getOrThrow(false, DeathCounter.LOGGER::error);
 	}
 
 	public void add(ServerPlayer player, Death death) {
