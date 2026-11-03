@@ -29,6 +29,9 @@ commands), so there is nothing to install on their side.
 | NeoForge | 26.3.0.23-beta or newer for Minecraft 26.3, nothing else |
 | Paper | 26.3 build 159 or newer, nothing else. Not Spigot, not Folia |
 
+For Minecraft 1.20.1 on Forge, see the
+[`mc/1.20.1`](https://github.com/RambonL/deathcounter/tree/mc/1.20.1) branch.
+
 ## Installation
 
 1. Download the jar from
@@ -148,8 +151,9 @@ to its own layout, though, and Fabric and NeoForge no longer boot it afterwards
 file, which stays where it was. Back the world up before moving it to
 Paper.
 
-A death costs about 576 bytes there, so twenty players at five hundred deaths
-each is roughly 700 KB on disk. Only what changed is encoded, and only when
+A death takes about 576 bytes there before the file is compressed, so twenty
+players at five hundred deaths each come to roughly 6 MB of that, and a good
+deal less on disk. Only what changed is encoded, and only when
 somebody actually died.
 
 The tab list number is only a display: the file is the source of truth, and the
